@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bojovka — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --border: #e0e0e0;
+  --text: #1a1a1a;
+  --muted: #666;
+  --accent: #2563eb;
+  --accent-light: #eff6ff;
+  --green: #16a34a;
+  --green-light: #f0fdf4;
+  --red: #dc2626;
+  --red-light: #fef2f2;
+  --yellow: #ca8a04;
+  --yellow-light: #fefce8;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+/* HEADER */
+header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow); }
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-logo { font-weight: 700; font-size: 16px; color: var(--text); }
+.header-logo span { color: var(--accent); }
+.header-badge { background: var(--accent-light); color: var(--accent); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+.back-btn { display: flex; align-items: center; gap: 6px; text-decoration: none; color: var(--muted); font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--border); transition: all .15s; }
+.back-btn:hover { background: var(--bg); color: var(--text); }
+
+/* GPS PILL */
+.gps-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; border-radius: 99px; font-weight: 500; }
+.gps-pill.loading { background: #f3f4f6; color: var(--muted); }
+.gps-pill.ok   { background: var(--green-light); color: var(--green); }
+.gps-pill.warn { background: var(--yellow-light); color: var(--yellow); }
+.gps-pill.err  { background: var(--red-light); color: var(--red); }
+.gps-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.gps-dot.pulse { animation: gpspulse 1.2s ease-in-out infinite; }
+@keyframes gpspulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* TABS */
+.tabs { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; display: flex; gap: 0; }
+.tab-btn { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; padding: 14px 18px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; transition: all .15s; white-space: nowrap; }
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* LAYOUT */
+.page-grid { display: grid; grid-template-columns: 420px 1fr; gap: 0; min-height: calc(100vh - 97px); }
+@media(max-width:860px) { .page-grid { grid-template-columns: 1fr; } }
+.sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 20px; overflow-y: auto; }
+.main-panel { padding: 20px; overflow-y: auto; }
+
+/* CARD */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.card-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+/* FORM */
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 4px; }
+input[type=text], input[type=number], textarea, select {
+  width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'Inter', sans-serif; font-size: 13px; padding: 8px 10px;
+  outline: none; transition: border-color .15s;
+}
+input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+textarea { resize: vertical; min-height: 72px; }
+select { cursor: pointer; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+/* ICON PICKER */
+.icon-picker { display: flex; flex-wrap: wrap; gap: 4px; }
+.icon-btn { font-size: 20px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 2px solid transparent; background: var(--bg); cursor: pointer; transition: all .1s; }
+.icon-btn:hover { background: var(--accent-light); }
+.icon-btn.active { border-color: var(--accent); background: var(--accent-light); }
+
+/* GPS ROW */
+.coord-row { display: flex; gap: 8px; align-items: flex-end; }
+.coord-row .two-col { flex: 1; margin: 0; }
+.coord-row button { flex-shrink: 0; white-space: nowrap; }
+
+/* MAP */
+#admin-map { width: 100%; height: 220px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 6px; }
+.map-hint { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+
+/* BUTTONS */
+.btn { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; padding: 8px 14px; border-radius: 6px; cursor: pointer; border: none; transition: all .15s; display: inline-flex; align-items: center; gap: 6px; }
+.btn-primary { background: var(--accent); color: #fff; width: 100%; justify-content: center; padding: 10px; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-secondary { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+.btn-secondary:hover { background: var(--border); }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--bg); color: var(--text); }
+.btn-gps { background: var(--green-light); color: var(--green); border: 1px solid #bbf7d0; font-size: 12px; padding: 8px 10px; }
+.btn-gps:hover { background: #dcfce7; }
+.btn-danger { background: var(--red-light); color: var(--red); border: 1px solid #fecaca; }
+.btn-danger:hover { background: #fee2e2; }
+.btn-green { background: var(--green); color: #fff; width: 100%; justify-content: center; padding: 10px; }
+.btn-green:hover { background: #15803d; }
+.btn-sm { font-size: 12px; padding: 6px 10px; }
+.btn-icon { background: transparent; border: none; padding: 4px 6px; cursor: pointer; color: var(--muted); border-radius: 4px; font-size: 14px; }
+.btn-icon:hover { background: var(--red-light); color: var(--red); }
+
+/* CHECKPOINT LIST */
+.cp-list { display: flex; flex-direction: column; gap: 8px; }
+.cp-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; display: flex; align-items: flex-start; gap: 10px; }
+.cp-icon { font-size: 22px; flex-shrink: 0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: var(--bg); border-radius: 6px; }
+.cp-num { font-size: 11px; font-weight: 700; color: var(--muted); min-width: 20px; margin-top: 2px; }
+.cp-body { flex: 1; min-width: 0; }
+.cp-name { font-size: 13px; font-weight: 500; margin-bottom: 3px; word-break: break-word; }
+.cp-name.random { color: var(--muted); font-style: italic; }
+.cp-meta { font-size: 11px; color: var(--muted); line-height: 1.6; }
+.cp-answer { font-size: 11px; color: var(--accent); margin-top: 2px; }
+.cp-empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px; }
+.cp-empty .icon { font-size: 32px; margin-bottom: 8px; }
+
+/* STATS ROW */
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; text-align: center; }
+.stat-val { font-size: 24px; font-weight: 700; color: var(--accent); }
+.stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* TRACKING */
+.team-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.team-rank { font-size: 20px; font-weight: 700; color: var(--accent); min-width: 28px; }
+.team-body { flex: 1; min-width: 0; }
+.team-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+.team-meta { font-size: 11px; color: var(--muted); }
+.team-score { font-size: 22px; font-weight: 700; color: var(--accent); }
+#track-map { width: 100%; height: 320px; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 12px; }
+.track-empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px; }
+
+/* BANK LIST */
+.bank-list { display: flex; flex-direction: column; gap: 6px; }
+.bq-item { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; }
+.bq-icon { font-size: 18px; flex-shrink: 0; }
+.bq-body { flex: 1; min-width: 0; }
+.bq-cat { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px; }
+.bq-text { font-size: 13px; color: var(--text); word-break: break-word; line-height: 1.4; }
+.bq-ans { font-size: 11px; color: var(--green); margin-top: 3px; font-weight: 500; }
+.bq-hint { font-size: 11px; color: var(--muted); margin-top: 2px; font-style: italic; }
+
+/* BANK BUILTIN BUTTON */
+.builtin-box { background: var(--accent-light); border: 1px solid #bfdbfe; border-radius: var(--radius); padding: 14px; margin-bottom: 16px; }
+.builtin-box h3 { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+.builtin-box p { font-size: 12px; color: #3b82f6; line-height: 1.5; margin-bottom: 10px; }
+
+/* EXPORT TAB */
+.export-section { max-width: 480px; padding: 24px; }
+.export-section h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.export-section p { font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+.export-actions { display: flex; flex-direction: column; gap: 10px; }
+.export-row-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.export-row-item .desc { font-size: 13px; font-weight: 500; }
+.export-row-item .subdesc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* TOAST */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px); background: #1a1a1a; color: #fff; font-size: 13px; padding: 10px 18px; border-radius: 99px; z-index: 9999; transition: transform .2s; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* MODAL */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:200; align-items:center; justify-content:center; padding:16px; }
+.modal-overlay.open { display:flex; }
+.modal-box { background:var(--surface); border-radius:12px; padding:20px; width:100%; max-width:520px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+.modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.modal-title { font-size:15px; font-weight:600; }
+
+/* DIVIDER */
+.divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="header-logo">Bojovka <span>.exe</span></div>
+    <div class="header-badge">Admin</div>
+    <div class="gps-pill loading" id="gps-pill">
+      <div class="gps-dot pulse"></div>
+      <span id="gps-text">Hledám GPS...</span>
+    </div>
+  </div>
+  <a href="index.html" class="back-btn">← Zpět na hru</a>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('checkpoints', this)">📍 Checkpointy</button>
+  <button class="tab-btn" onclick="switchTab('qbank', this)">🎲 Databáze otázek</button>
+  <button class="tab-btn" onclick="switchTab('tracking', this)">👥 Sledování týmů</button>
+  <button class="tab-btn" onclick="switchTab('export', this)">💾 Export / Import</button>
+</div>
+
+<!-- TAB: CHECKPOINTY -->
+<div id="tab-checkpoints" class="tab-pane active">
+  <div class="page-grid">
+
+    <!-- SIDEBAR: FORM -->
+    <div class="sidebar">
+      <div class="card">
+        <div class="card-title"><div class="dot"></div> Nový checkpoint</div>
+
+        <div class="field">
+          <label>Ikona markeru</label>
+          <div class="icon-picker" id="icon-picker"></div>
+          <input type="hidden" id="a-icon" value="📍">
+        </div>
+
+        <div class="field">
+          <label>Vlastní otázka <span style="font-weight:400;color:var(--muted)">(nebo nech prázdné = náhodná z databáze)</span></label>
+          <textarea id="a-q" placeholder="Nechej prázdné pro náhodnou otázku z banky..."></textarea>
+        </div>
+
+        <div class="two-col">
+          <div class="field">
+            <label>Správná odpověď</label>
+            <input type="text" id="a-ans" placeholder="(prázdné = otevřená)">
+          </div>
+          <div class="field">
+            <label>Nápověda</label>
+            <input type="text" id="a-hint" placeholder="(volitelné)">
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="field">
+            <label>Body za správnou odpověď</label>
+            <input type="number" id="a-pts" value="1" min="1" max="99">
+          </div>
+          <div class="field">
+            <label>Dosah odemčení (metrů)</label>
+            <input type="number" id="a-rad" value="30" min="5" max="500">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>GPS souřadnice</label>
+          <div class="coord-row">
+            <div class="two-col">
+              <input type="number" id="a-lat" placeholder="Zeměpisná šířka" step="0.00001">
+              <input type="number" id="a-lng" placeholder="Zeměpisná délka" step="0.00001">
+            </div>
+            <button class="btn btn-gps btn-sm" onclick="useMyGPS()">📍 Moje GPS</button>
+          </div>
+        </div>
+
+        <div id="admin-map"></div>
+        <div class="map-hint">💡 Klikni na mapu pro rychlé zadání souřadnic</div>
+
+        <button class="btn btn-primary" onclick="addQuestion()">+ Přidat checkpoint</button>
+      </div>
+    </div>
+
+    <!-- MAIN: LIST -->
+    <div class="main-panel">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+        <h2 style="font-size:15px; font-weight:600;">Checkpointy <span style="color:var(--muted);font-weight:400" id="q-count-badge"></span></h2>
+        <button class="btn btn-secondary btn-sm" onclick="checkTerrainAll()" id="btn-terrain-check" title="Zkontroluje každý bod přes OSM a označí vodu/kemp">🗺️ Zkontrolovat terén</button>
+      </div>
+      <div class="cp-list" id="q-list">
+        <div class="cp-empty"><div class="icon">📍</div>Zatím žádné checkpointy.<br>Přidej první pomocí formuláře.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TAB: DATABÁZE -->
+<div id="tab-qbank" class="tab-pane">
+  <div class="page-grid">
+    <div class="sidebar">
+
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-val" id="bank-total">0</div><div class="stat-lbl">Otázek celkem</div></div>
+        <div class="stat-card"><div class="stat-val" id="bank-cats">0</div><div class="stat-lbl">Kategorií</div></div>
+        <div class="stat-card"><div class="stat-val" id="bank-with-ans">0</div><div class="stat-lbl">Se správnou odp.</div></div>
+      </div>
+
+      <div class="builtin-box">
+        <h3>📦 Vestavěná databáze (60+ otázek)</h3>
+        <p>Obsahuje otázky z české popkultury 90s/2000s, videoher, anime, přírody, sportu a vědy.</p>
+        <button class="btn btn-primary" onclick="loadBuiltinQuestions()">Načíst všechny otázky</button>
+      </div>
+
+      <hr class="divider">
+
+      <div class="card">
+        <div class="card-title"><div class="dot" style="background:var(--green)"></div> Přidat otázku ručně</div>
+
+        <div class="field">
+          <label>Text otázky</label>
+          <textarea id="mq-text" placeholder="Napiš otázku..."></textarea>
+        </div>
+        <div class="two-col">
+          <div class="field">
+            <label>Správná odpověď</label>
+            <input type="text" id="mq-ans" placeholder="(prázdné = otevřená)">
+          </div>
+          <div class="field">
+            <label>Kategorie</label>
+            <input type="text" id="mq-cat" placeholder="např. příroda">
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="field">
+            <label>Ikona (emoji)</label>
+            <input type="text" id="mq-icon" placeholder="❓" style="font-size:18px;">
+          </div>
+          <div class="field">
+            <label>Nápověda</label>
+            <input type="text" id="mq-hint" placeholder="(volitelné)">
+          </div>
+        </div>
+        <button class="btn btn-green" onclick="addManualQuestion()">+ Přidat do banky</button>
+      </div>
+    </div>
+
+    <div class="main-panel">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:10px; flex-wrap:wrap;">
+        <h2 style="font-size:15px; font-weight:600;">Banka otázek <span style="color:var(--muted);font-weight:400" id="bank-count-badge"></span></h2>
+        <button class="btn btn-danger btn-sm" onclick="clearBank()">Vymazat banku</button>
+      </div>
+      <div class="bank-list" id="bank-list">
+        <div class="cp-empty"><div class="icon">🎲</div>Banka je prázdná.<br>Načti vestavěné otázky nebo přidej vlastní.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: SLEDOVÁNÍ TÝMŮ -->
+<div id="tab-tracking" class="tab-pane">
+  <div class="page-grid">
+    <div class="sidebar">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <h2 style="font-size:15px;font-weight:600;">Týmy <span style="color:var(--muted);font-weight:400" id="teams-count"></span></h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="loadTeams()">↺ Obnovit</button>
+          <button class="btn btn-danger btn-sm" onclick="resetScores()">✕ Reset skóre</button>
+        </div>
+      </div>
+      <div id="teams-list"><div class="track-empty">Klikni Obnovit pro načtení týmů.</div></div>
+    </div>
+    <div class="main-panel">
+      <h2 style="font-size:15px;font-weight:600;margin-bottom:12px;">Mapa checkpointů</h2>
+      <div id="track-map"></div>
+      <p style="font-size:12px;color:var(--muted);">Checkpointy jsou zobrazeny na mapě. Pozice týmů nejsou k dispozici v offline režimu.</p>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: EXPORT -->
+<div id="tab-export" class="tab-pane">
+  <div class="export-section">
+    <h2>Export a import dat</h2>
+    <p>Zálohuj checkpointy a otázky, nebo je sdílej s ostatními zařízeními.</p>
+    <div class="export-actions">
+      <div class="export-row-item">
+        <div><div class="desc">Export všeho</div><div class="subdesc">Checkpointy, postup i banka otázek</div></div>
+        <button class="btn btn-secondary btn-sm" onclick="exportAll()">Stáhnout JSON</button>
+      </div>
+      <div class="export-row-item">
+        <div><div class="desc">Export banky otázek</div><div class="subdesc">Pouze databáze otázek</div></div>
+        <button class="btn btn-secondary btn-sm" onclick="exportBank()">Stáhnout JSON</button>
+      </div>
+      <div class="export-row-item">
+        <div><div class="desc">Import ze souboru</div><div class="subdesc">Načte checkpointy, postup i banku</div></div>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('imp').click()">Vybrat soubor</button>
+      </div>
+      <hr class="divider">
+      <div class="export-row-item" style="border-color:#fecaca;">
+        <div><div class="desc" style="color:var(--red)">Reset postupu hráčů</div><div class="subdesc">Vymaže kdo co splnil, checkpointy zůstanou</div></div>
+        <button class="btn btn-danger btn-sm" onclick="resetProgress()">Reset</button>
+      </div>
+      <div class="export-row-item" style="border-color:#fecaca;">
+        <div><div class="desc" style="color:var(--red)">Smazat vše</div><div class="subdesc">Checkpointy, postup i celá banka otázek</div></div>
+        <button class="btn btn-danger btn-sm" onclick="resetAll()">Smazat vše</button>
+      </div>
+    </div>
+    <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- EDIT MODAL -->
+<div id="edit-modal" class="modal-overlay" onclick="if(event.target===this)closeEdit()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Upravit checkpoint</span>
+      <button class="btn-icon" onclick="closeEdit()">✕</button>
+    </div>
+
+    <div class="field">
+      <label>Ikona</label>
+      <div class="icon-picker" id="edit-icon-picker"></div>
+      <input type="hidden" id="edit-icon-val" value="📍">
+    </div>
+
+    <div class="field">
+      <label>Vlastní otázka <span style="font-weight:400;color:var(--muted)">(prázdné = náhodná z banky)</span></label>
+      <textarea id="edit-q" placeholder="Nech prázdné pro náhodnou otázku..."></textarea>
+    </div>
+
+    <div class="two-col">
+      <div class="field">
+        <label>Správná odpověď</label>
+        <input type="text" id="edit-ans" placeholder="(prázdné = otevřená)">
+      </div>
+      <div class="field">
+        <label>Nápověda</label>
+        <input type="text" id="edit-hint" placeholder="(volitelné)">
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="field">
+        <label>Body</label>
+        <input type="number" id="edit-pts" value="1" min="1" max="99">
+      </div>
+      <div class="field">
+        <label>Dosah (m)</label>
+        <input type="number" id="edit-rad" value="30" min="5" max="500">
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="field">
+        <label>Šířka (lat)</label>
+        <input type="number" id="edit-lat" step="0.00001">
+      </div>
+      <div class="field">
+        <label>Délka (lng)</label>
+        <input type="number" id="edit-lng" step="0.00001">
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-primary" onclick="saveEdit()" style="flex:1">Uložit změny</button>
+      <button class="btn btn-ghost" onclick="closeEdit()">Zrušit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY  = 'bojovka_questions';
+const PROGRESS_KEY = 'bojovka_progress';
+const QBANK_KEY    = 'bojovka_qbank';
+const WORKER_URL   = 'https://bojovka-worker.valapavel99.workers.dev';
+const GAME_ID      = 'orlik2025';
+const ADMIN_SECRET = 'bojovka2026';
+
+const MARKER_ICONS = ['📍','🚀','🏆','💧','🌲','🪨','🔥','💀','⭐','📦','🚩','❓','🦊','🍄','🌊','🏕️'];
+
+let questions = [], progress = {}, questionBank = [];
+let adminMap, adminMarkers = {};
+let myLat = null, myLng = null;
+let selectedIcon = '📍';
+let editingId = null;
+let trackMap = null;
+
+// ── PRELOAD ──
+const PRELOAD = {"questions":[{"id":"mpycpbd9js69","text":"","answer":"","hint":"","lat":49.543977,"lng":14.175043,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpj9f9hk5","text":"","answer":"","hint":"","lat":49.543709,"lng":14.177347,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpm14xbji","text":"","answer":"","hint":"","lat":49.542226,"lng":14.174359,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpokewr3d","text":"","answer":"","hint":"","lat":49.542337,"lng":14.178157,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpqidvks4","text":"","answer":"","hint":"","lat":49.542922,"lng":14.180474,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpsonxk8h","text":"","answer":"","hint":"","lat":49.541613,"lng":14.179809,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpv6usxxm","text":"","answer":"","hint":"","lat":49.54114,"lng":14.181333,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpws2w98x","text":"","answer":"","hint":"","lat":49.540068,"lng":14.180925,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycq2aknuxx","text":"","answer":"","hint":"","lat":49.537812,"lng":14.180367,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycq3uqsqvw","text":"","answer":"","hint":"","lat":49.53997,"lng":14.18247,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycq5ycsqua","text":"","answer":"","hint":"","lat":49.536949,"lng":14.18247,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycqufikmrd","text":"","answer":"","hint":"","lat":49.54048817042011,"lng":14.17728800110108,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"}]};
+
+function init() {
+  const storedQ = localStorage.getItem(STORAGE_KEY);
+  questions    = storedQ ? JSON.parse(storedQ) : PRELOAD.questions;
+  if (!storedQ) localStorage.setItem(STORAGE_KEY, JSON.stringify(questions));
+  progress     = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}');
+  questionBank = JSON.parse(localStorage.getItem(QBANK_KEY)    || '[]');
+  initMap();
+  renderIconPicker();
+  document.getElementById('edit-icon-picker').innerHTML = MARKER_ICONS.map(icon =>
+    `<div class="icon-btn edit-icon-btn" onclick="selectEditIcon('${icon}')">${icon}</div>`
+  ).join('');
+  renderList();
+  renderBank();
+  startGPS();
+  updateBankStats();
+}
+
+// ── MAP ──
+function initMap() {
+  adminMap = L.map('admin-map', { zoomControl: true }).setView([49.54239, 14.17776], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM', maxZoom: 19 }).addTo(adminMap);
+  adminMap.on('click', e => {
+    document.getElementById('a-lat').value = e.latlng.lat.toFixed(6);
+    document.getElementById('a-lng').value = e.latlng.lng.toFixed(6);
+    toast('Souřadnice nastaveny ✓');
+  });
+  questions.forEach((q, i) => addAdminMarker(q, i + 1));
+}
+
+function addAdminMarker(q, num) {
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="width:32px;height:32px;background:#2563eb;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${q.markerIcon || '📍'}</div>`,
+    iconSize: [32, 32], iconAnchor: [16, 16]
+  });
+  adminMarkers[q.id] = L.marker([q.lat, q.lng], { icon }).addTo(adminMap);
+}
+
+// ── GPS ──
+function startGPS() {
+  const pill = document.getElementById('gps-pill');
+  const txt  = document.getElementById('gps-text');
+  if (!navigator.geolocation) { pill.className = 'gps-pill err'; txt.textContent = 'GPS nedostupné'; return; }
+  navigator.geolocation.watchPosition(
+    pos => {
+      myLat = pos.coords.latitude; myLng = pos.coords.longitude;
+      const acc = Math.round(pos.coords.accuracy);
+      pill.className = acc <= 50 ? 'gps-pill ok' : 'gps-pill warn';
+      pill.querySelector('.gps-dot').classList.remove('pulse');
+      txt.textContent = `±${acc}m`;
+    },
+    () => { pill.className = 'gps-pill err'; txt.textContent = 'GPS chyba'; },
+    { enableHighAccuracy: true, maximumAge: 5000 }
+  );
+}
+
+function useMyGPS() {
+  if (myLat == null) { toast('GPS poloha ještě není dostupná'); return; }
+  document.getElementById('a-lat').value = myLat.toFixed(6);
+  document.getElementById('a-lng').value = myLng.toFixed(6);
+  adminMap.setView([myLat, myLng], 17);
+  toast('Souřadnice doplněny ✓');
+}
+
+// ── ICON PICKER ──
+function renderIconPicker() {
+  document.getElementById('icon-picker').innerHTML = MARKER_ICONS.map(icon =>
+    `<div class="icon-btn${icon === '📍' ? ' active' : ''}" onclick="selectIcon('${icon}')">${icon}</div>`
+  ).join('');
+}
+
+function selectIcon(icon) {
+  selectedIcon = icon;
+  document.getElementById('a-icon').value = icon;
+  document.querySelectorAll('#icon-picker .icon-btn').forEach(el => el.classList.toggle('active', el.textContent.trim() === icon));
+}
+
+function selectEditIcon(icon) {
+  document.getElementById('edit-icon-val').value = icon;
+  document.querySelectorAll('.edit-icon-btn').forEach(el => el.classList.toggle('active', el.textContent.trim() === icon));
+}
+
+// ── CHECKPOINTS ──
+function addQuestion() {
+  const text   = document.getElementById('a-q').value.trim();
+  const answer = document.getElementById('a-ans').value.trim();
+  const hint   = document.getElementById('a-hint').value.trim();
+  const lat    = parseFloat(document.getElementById('a-lat').value);
+  const lng    = parseFloat(document.getElementById('a-lng').value);
+  const radius = parseInt(document.getElementById('a-rad').value) || 30;
+  const points = parseInt(document.getElementById('a-pts').value) || 1;
+  if (isNaN(lat) || isNaN(lng)) { toast('Zadej GPS souřadnice!'); return; }
+  const q = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, answer, hint, lat, lng, radius, points, markerIcon: selectedIcon, markerType: selectedIcon };
+  questions.push(q); saveQ(); renderList(); addAdminMarker(q, questions.length);
+  adminMap.setView([lat, lng], 16);
+  ['a-q','a-ans','a-hint','a-lat','a-lng'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('a-rad').value = 30; document.getElementById('a-pts').value = 1;
+  toast('Checkpoint přidán ✓');
+}
+
+function deleteQuestion(id) {
+  if (!confirm('Smazat tento checkpoint?')) return;
+  questions = questions.filter(q => q.id !== id); delete progress[id]; saveQ(); saveP();
+  if (adminMarkers[id]) { adminMap.removeLayer(adminMarkers[id]); delete adminMarkers[id]; }
+  renderList(); toast('Smazáno');
+}
+
+function renderList() {
+  const el = document.getElementById('q-list');
+  document.getElementById('q-count-badge').textContent = questions.length ? `(${questions.length})` : '';
+  if (!questions.length) { el.innerHTML = '<div class="cp-empty"><div class="icon">📍</div>Zatím žádné checkpointy.<br>Přidej první pomocí formuláře.</div>'; return; }
+  el.innerHTML = questions.map((q, i) => `
+    <div class="cp-item" id="cp-${q.id}">
+      <div class="cp-icon">${q.markerIcon || '📍'}</div>
+      <div class="cp-body">
+        <div class="cp-name ${q.text ? '' : 'random'}">${q.text ? esc(q.text) : '— náhodná otázka z banky —'} <span id="terrain-${q.id}" style="font-size:11px;margin-left:4px"></span></div>
+        <div class="cp-meta">${q.lat.toFixed(5)}, ${q.lng.toFixed(5)} · dosah ${q.radius} m · ${q.points} bod/ů</div>
+        <div class="cp-answer">${q.answer ? '✓ ' + esc(q.answer) : q.text ? 'otevřená otázka' : ''}</div>
+      </div>
+      <span style="color:var(--muted);font-size:12px;font-weight:600;margin-right:2px;flex-shrink:0">#${i+1}</span>
+      <button class="btn-icon" onclick="openEdit('${q.id}')" title="Upravit">✏️</button>
+      <button class="btn-icon" onclick="deleteQuestion('${q.id}')" title="Smazat">🗑️</button>
+    </div>`).join('');
+}
+
+async function checkTerrainAll() {
+  const btn = document.getElementById('btn-terrain-check');
+  btn.textContent = '⏳ Stahuji OSM data...';
+  btn.disabled = true;
+
+  // Jeden hromadný Overpass dotaz pro celou oblast
+  const lats = questions.map(q => q.lat);
+  const lngs = questions.map(q => q.lng);
+  const s = (Math.min(...lats) - 0.003).toFixed(6);
+  const n = (Math.max(...lats) + 0.003).toFixed(6);
+  const w = (Math.min(...lngs) - 0.003).toFixed(6);
+  const e = (Math.max(...lngs) + 0.003).toFixed(6);
+
+  const query = `[out:json][timeout:30];
+(
+  way(${s},${w},${n},${e})[natural=water];
+  way(${s},${w},${n},${e})[landuse=reservoir];
+  way(${s},${w},${n},${e})[waterway=riverbank];
+  way(${s},${w},${n},${e})[natural=wood];
+  way(${s},${w},${n},${e})[landuse=forest];
+  way(${s},${w},${n},${e})[leisure=camp_site];
+  way(${s},${w},${n},${e})[tourism=camp_site];
+  relation(${s},${w},${n},${e})[natural=water];
+  relation(${s},${w},${n},${e})[landuse=reservoir];
+);
+out geom;`;
+
+  let water = [], forest = [], camp = [];
+
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    const data = await res.json();
+    const els = data.elements || [];
+
+    for (const el of els) {
+      const geom = el.geometry || [];
+      if (!geom.length) continue;
+      const tags = el.tags || {};
+      if (tags.natural === 'water' || tags.landuse === 'reservoir' || tags.waterway === 'riverbank')
+        water.push(geom);
+      else if (tags.natural === 'wood' || tags.landuse === 'forest')
+        forest.push(geom);
+      else if ((tags.leisure || '').includes('camp') || (tags.tourism || '').includes('camp'))
+        camp.push(geom);
+    }
+
+    btn.textContent = `⏳ Klasifikuji ${questions.length} bodů...`;
+
+    function inPoly(lng, lat, poly) {
+      let inside = false, j = poly.length - 1;
+      for (let i = 0; i < poly.length; i++) {
+        const xi = poly[i].lon, yi = poly[i].lat;
+        const xj = poly[j].lon, yj = poly[j].lat;
+        if (((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi))
+          inside = !inside;
+        j = i;
+      }
+      return inside;
+    }
+
+    let issues = 0;
+    for (const q of questions) {
+      const badge = document.getElementById('terrain-' + q.id);
+      if (!badge) continue;
+
+      const inWater  = water.some(p => inPoly(q.lng, q.lat, p));
+      const inCamp   = camp.some(p => inPoly(q.lng, q.lat, p));
+      const inForest = forest.some(p => inPoly(q.lng, q.lat, p));
+
+      if (inWater)       { badge.textContent = '❌ VODA'; issues++; }
+      else if (inCamp)   { badge.textContent = '⚠️ KEMP'; issues++; }
+      else if (inForest) { badge.textContent = '✅ LES'; }
+      else               { badge.textContent = '🌿 terén'; }
+    }
+
+    btn.disabled = false;
+    btn.textContent = `🗺️ Terén${issues > 0 ? ` (${issues} ❌)` : ' ✓'}`;
+    if (issues > 0) toast(`⚠️ ${issues} bod/ů ve vodě nebo kempu`);
+    else toast('✅ Žádné body ve vodě ani kempu');
+
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '🗺️ Zkontrolovat terén';
+    toast('Chyba: ' + e.message);
+    // Fallback — zobraz přímý odkaz
+    questions.forEach(q => {
+      const badge = document.getElementById('terrain-' + q.id);
+      if (badge) badge.innerHTML = `<a href="https://www.openstreetmap.org/?mlat=${q.lat}&mlon=${q.lng}#map=18/${q.lat}/${q.lng}" target="_blank" style="font-size:10px;color:var(--accent)">OSM ↗</a>`;
+    });
+  }
+}
+
+// ── EDIT MODAL ──
+function openEdit(id) {
+  const q = questions.find(x => x.id === id);
+  if (!q) return;
+  editingId = id;
+  document.getElementById('edit-q').value    = q.text || '';
+  document.getElementById('edit-ans').value  = q.answer || '';
+  document.getElementById('edit-hint').value = q.hint || '';
+  document.getElementById('edit-lat').value  = q.lat;
+  document.getElementById('edit-lng').value  = q.lng;
+  document.getElementById('edit-rad').value  = q.radius || 30;
+  document.getElementById('edit-pts').value  = q.points || 1;
+  document.getElementById('edit-icon-val').value = q.markerIcon || '📍';
+  document.querySelectorAll('.edit-icon-btn').forEach(el => el.classList.toggle('active', el.textContent.trim() === (q.markerIcon || '📍')));
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeEdit() { document.getElementById('edit-modal').classList.remove('open'); editingId = null; }
+
+function saveEdit() {
+  if (!editingId) return;
+  const idx = questions.findIndex(x => x.id === editingId);
+  if (idx === -1) return;
+  const lat = parseFloat(document.getElementById('edit-lat').value);
+  const lng = parseFloat(document.getElementById('edit-lng').value);
+  if (isNaN(lat) || isNaN(lng)) { toast('Zkontroluj souřadnice'); return; }
+  const icon = document.getElementById('edit-icon-val').value || '📍';
+  questions[idx] = { ...questions[idx], text: document.getElementById('edit-q').value.trim(), answer: document.getElementById('edit-ans').value.trim(), hint: document.getElementById('edit-hint').value.trim(), lat, lng, radius: parseInt(document.getElementById('edit-rad').value) || 30, points: parseInt(document.getElementById('edit-pts').value) || 1, markerIcon: icon, markerType: icon };
+  saveQ();
+  if (adminMarkers[editingId]) { adminMap.removeLayer(adminMarkers[editingId]); delete adminMarkers[editingId]; }
+  addAdminMarker(questions[idx], idx + 1);
+  renderList(); closeEdit(); toast('Checkpoint uložen ✓');
+}
+
+// ── QUESTION BANK ──
+const BUILTIN_QUESTIONS = [
+  {id:"cz01",question:"Jak se jmenoval maskot České pojišťovny — animovaný zelený tvor?",answer:"Rákosníček",hint:"Skřítek z pohádky, zelený, bydlí u vody",category:"🇨🇿 Česká popkultura",icon:"📺"},
+  {id:"cz02",question:"Který český zpěvák je známý hity Holka modrooká a Nonstop?",answer:"Michal David",hint:"Král 90s diskoték",category:"🇨🇿 Česká popkultura",icon:"🎵"},
+  {id:"cz03",question:"Jak se jmenuje pohádkový záporák seriálu Arabela?",answer:"Rumburak",hint:"Čaroděj v černém plášti",category:"🇨🇿 Česká popkultura",icon:"🏰"},
+  {id:"cz04",question:"Z jakého města pocházel loupežník Rumcajs?",answer:"Jičín",hint:"Podkrkonoší",category:"🇨🇿 Česká popkultura",icon:"🪓"},
+  {id:"cz05",question:"Jaká česká punk kapela zpívala Tři čuníci?",answer:"Tři sestry",hint:"Pražská punk legenda",category:"🇨🇿 Česká popkultura",icon:"🐷"},
+  {id:"cz06",question:"Jak se jmenují čtyři hrdinové komiksu Čtyřlístek?",answer:"Myšpulín, Fifinka, Pinďa, Bobík",hint:"Každý má jiný charakter",category:"🇨🇿 Česká popkultura",icon:"🍀"},
+  {id:"cz07",question:"Který český herec a scenárista hrál divadelní postavy Járy Cimrmana?",answer:"Zdeněk Svěrák",hint:"Napsal také film Kolja",category:"🇨🇿 Česká popkultura",icon:"🎭"},
+  {id:"cz08",question:"Jaký nápoj je českou alternativou Coca-Coly?",answer:"Kofola",hint:"Vyráběla se od dob komunismu",category:"🇨🇿 Česká popkultura",icon:"🥤"},
+  {id:"cz09",question:"Kdo byl prvním prezidentem České republiky?",answer:"Václav Havel",hint:"Byl to dramatik a disident",category:"🇨🇿 Česká popkultura",icon:"🇨🇿"},
+  {id:"cz10",question:"Kde bydleli pohádkoví skřítci Křemílek a Vochomůrka?",answer:"V houbě",hint:"Takový malý domek",category:"🇨🇿 Česká popkultura",icon:"🍄"},
+  {id:"cz11",question:"Jak se jmenuje záporná postava pohádky Tři oříšky pro Popelku?",answer:"Macecha",hint:"Zlá náhradní matka",category:"🇨🇿 Česká popkultura",icon:"👸"},
+  {id:"cz12",question:"Jaký sport hrál Dominik Hašek, který dovedl Česko ke zlaté na OH 1998?",answer:"Hokej",hint:"Chytal jako bůh v Naganu",category:"🇨🇿 Česká popkultura",icon:"🏒"},
+  {id:"vg01",question:"Jak se jmenuje princezna, kterou zachraňuje Mario?",answer:"Peach",hint:"Je růžová a vládne Houbovému království",category:"🎮 Videohry",icon:"🎮"},
+  {id:"vg02",question:"Jak se jmenuje slavný kód (nahoru nahoru dolů dolů...) ze hry Contra?",answer:"Konami kód",hint:"Dával 30 životů",category:"🎮 Videohry",icon:"🕹️"},
+  {id:"vg03",question:"Který Pokémon nese číslo 001 v Národním Pokédexu?",answer:"Bulbasaur",hint:"Trávo-jedový typ, má na zádech cibuli",category:"🎮 Videohry",icon:"🌿"},
+  {id:"vg04",question:"Jak se jmenuje hlavní záporák ve hře The Legend of Zelda?",answer:"Ganon",hint:"Také znám jako Ganondorf",category:"🎮 Videohry",icon:"🗡️"},
+  {id:"vg05",question:"V jakém roce vyšel první Game Boy?",answer:"1989",hint:"Stejný rok jako sametová revoluce",category:"🎮 Videohry",icon:"🕹️"},
+  {id:"vg06",question:"Jak se jmenuje modrý ježek, maskot firmy Sega?",answer:"Sonic",hint:"Běží hodně rychle",category:"🎮 Videohry",icon:"💙"},
+  {id:"vg07",question:"Co se sbírá ve hře Pac-Man?",answer:"Tečky",hint:"A vyhýbá se duchům",category:"🎮 Videohry",icon:"👻"},
+  {id:"vg08",question:"Jak se jmenuje hlavní hrdinka hry Tomb Raider?",answer:"Lara Croft",hint:"Archeologka s copánky",category:"🎮 Videohry",icon:"🏺"},
+  {id:"vg09",question:"Na jaké konzoli vyšlo jako první GTA III?",answer:"PlayStation 2",hint:"Šedá krabice s DVD",category:"🎮 Videohry",icon:"🚗"},
+  {id:"vg10",question:"Jak se jmenuje záporák hry Mortal Kombat, který říká Finish him?",answer:"Shao Kahn",hint:"Vládce Outworld",category:"🎮 Videohry",icon:"💀"},
+  {id:"an01",question:"Jaký je originální japonský název Astroboye?",answer:"Tetsuwan Atom",hint:"Atomový chlapec",category:"🌸 Anime",icon:"🤖"},
+  {id:"an02",question:"Kdo je autor mangy Astroboy?",answer:"Osamu Tezuka",hint:"Říká se mu Bůh mangy",category:"🌸 Anime",icon:"✏️"},
+  {id:"an03",question:"Jak se jmenuje hlavní záporák Dragon Ball Z, který se dokáže transformovat?",answer:"Freeza",hint:"Studený jako led, vládce vesmíru",category:"🌸 Anime",icon:"🐉"},
+  {id:"an04",question:"Jak se jmenuje Ash Ketchumův první Pokémon?",answer:"Pikachu",hint:"Žlutý, elektrický",category:"🌸 Anime",icon:"⚡"},
+  {id:"an05",question:"Z jakého města pochází Sailor Moon?",answer:"Tokio",hint:"Brání ho Sailor guardians",category:"🌸 Anime",icon:"🌙"},
+  {id:"an06",question:"Jak se jmenuje nindža v oranžovém dresu z anime Naruto?",answer:"Naruto Uzumaki",hint:"Sní o tom stát se Hokagem",category:"🌸 Anime",icon:"🍜"},
+  {id:"an07",question:"V jakém anime je hlavní hrdina detektiv, který se zmenšil na dítě?",answer:"Detektiv Conan",hint:"Jinak také Case Closed",category:"🌸 Anime",icon:"🔍"},
+  {id:"an08",question:"Jak se jmenuje obří robot, který pilotuje Shinji Ikari?",answer:"Evangelion Unit-01",hint:"NGE — Neon Genesis Evangelion",category:"🌸 Anime",icon:"🤖"},
+  {id:"an09",question:"Jaké je skutečné jméno hrdiny Death Note, který píše jména do sešitu?",answer:"Light Yagami",hint:"Student, chce se stát bohem nového světa",category:"🌸 Anime",icon:"📓"},
+  {id:"an10",question:"Jak se jmenuje kapitán pirátů s kloboukem ze slámy v One Piece?",answer:"Monkey D. Luffy",hint:"Chce se stát Králem pirátů",category:"🌸 Anime",icon:"🏴‍☠️"},
+  {id:"pr01",question:"Jak se jmenuje největší dravý pták v ČR?",answer:"Orel skalní",hint:"Hnízdí ve skalách a horách",category:"🌿 Příroda",icon:"🦅"},
+  {id:"pr02",question:"Která houba má červený klobouk s bílými tečkami a je jedovatá?",answer:"Muchomůrka červená",hint:"V pohádkách na ní sedí skřítci",category:"🌿 Příroda",icon:"🍄"},
+  {id:"pr03",question:"Jak se jmenuje největší přírodní jezero v ČR?",answer:"Černé jezero",hint:"Leží na Šumavě",category:"🌿 Příroda",icon:"💧"},
+  {id:"pr04",question:"Jak se jmenuje přehrada, na které hrajeme tuto bojovku?",answer:"Orlík",hint:"Největší vodní nádrž v ČR na řece Vltavě",category:"🌿 Příroda",icon:"🌊"},
+  {id:"pr05",question:"Jak se jmenuje nejdelší řeka v ČR?",answer:"Vltava",hint:"Protéká Prahou",category:"🌿 Příroda",icon:"🏞️"},
+  {id:"pr06",question:"Jaký strom nese bodlavé ježky s kaštany uvnitř?",answer:"Kaštan koňský",hint:"Na podzim je sbíráme pod stromem",category:"🌿 Příroda",icon:"🌰"},
+  {id:"pr07",question:"Kolik let průměrně žije dub?",answer:"500 až 1000 let",hint:"Mnohem víc než člověk",category:"🌿 Příroda",icon:"🌳"},
+  {id:"pr08",question:"Jak se jmenuje největší kočkovitá šelma žijící v české přírodě?",answer:"Rys ostrovid",hint:"Má charakteristické licousy",category:"🌿 Příroda",icon:"🐆"},
+  {id:"wp01",question:"Jak se jmenoval zpěvák skupiny Queen?",answer:"Freddie Mercury",hint:"Zemřel v roce 1991",category:"🌍 Světová kultura",icon:"🎤"},
+  {id:"wp02",question:"Ve kterém roce vyšel film Titanic s Leonardem DiCapriem?",answer:"1997",hint:"Loď potopil ledovec",category:"🌍 Světová kultura",icon:"🚢"},
+  {id:"wp03",question:"Jak se jmenuje čarodějnický hrdina knih J. K. Rowlingové?",answer:"Harry Potter",hint:"Má jizvu na čele ve tvaru blesku",category:"🌍 Světová kultura",icon:"⚡"},
+  {id:"wp04",question:"Jaká americká kapela zpívala Smells Like Teen Spirit?",answer:"Nirvana",hint:"Zpěvák Kurt Cobain",category:"🌍 Světová kultura",icon:"🎸"},
+  {id:"wp05",question:"Ve které zemi se natáčela filmová trilogie Pán prstenů?",answer:"Nový Zéland",hint:"Hobiti žili v malých norkách",category:"🌍 Světová kultura",icon:"💍"},
+  {id:"wp06",question:"Kdo zpíval hit Baby One More Time z roku 1998?",answer:"Britney Spears",hint:"Americká popstar v šatičkách",category:"🌍 Světová kultura",icon:"💃"},
+  {id:"wp07",question:"Ve které zemi vznikly stavebnice LEGO?",answer:"Dánsko",hint:"Severní Evropa",category:"🌍 Světová kultura",icon:"🧱"},
+  {id:"wp08",question:"Jak se jmenuje hlavní záporák Star Wars?",answer:"Darth Vader",hint:"Je to Lukův otec",category:"🌍 Světová kultura",icon:"⚔️"},
+  {id:"sp01",question:"Kolik gólů dal Jaromír Jágr celkem v NHL?",answer:"766",hint:"Druhý nejvyšší střelec v historii ligy",category:"⚽ Sport",icon:"🏒"},
+  {id:"sp02",question:"Ve kterém roce získalo Česko zlatou medaili na hokejovém MS?",answer:"2010",hint:"Hrálo se v Německu",category:"⚽ Sport",icon:"🥇"},
+  {id:"sp03",question:"Jak se jmenuje fotbalový stadion Sparty Praha?",answer:"Letná",hint:"Nad Prahou v parku",category:"⚽ Sport",icon:"⚽"},
+  {id:"sp04",question:"Kdo drží rekord v počtu grandslamových titulů v tenise?",answer:"Novak Djokovic",hint:"Srbský hráč, přezdívka Nole",category:"⚽ Sport",icon:"🎾"},
+  {id:"sp05",question:"Kolik zlatých olympijských medailí vyhrál plavec Michael Phelps?",answer:"23",hint:"Nejvíc v historii OH",category:"⚽ Sport",icon:"🏊"},
+  {id:"sc01",question:"Kolik planet obíhá kolem Slunce?",answer:"8",hint:"Pluto se už nepočítá",category:"🔬 Věda",icon:"🪐"},
+  {id:"sc02",question:"Jaký plyn tvoří přibližně 78 % zemské atmosféry?",answer:"Dusík",hint:"Není to kyslík",category:"🔬 Věda",icon:"💨"},
+  {id:"sc03",question:"Kdo jako první patentoval telefon?",answer:"Alexander Graham Bell",hint:"Rok 1876",category:"🔬 Věda",icon:"📞"},
+  {id:"sc04",question:"Z jakého prvku jsou vyráběny počítačové čipy?",answer:"Křemík",hint:"Pochází z písku",category:"🔬 Věda",icon:"💻"},
+  {id:"sc05",question:"Jak se nazývá nejmenší stavební jednotka chemického prvku?",answer:"Atom",hint:"Má jádro a elektrony",category:"🔬 Věda",icon:"⚛️"},
+  {id:"ph01",question:"Kolik trpaslíků žilo se Sněhurkou?",answer:"Sedm",hint:"Každý měl jiné jméno — Stydlín, Rejpalík...",category:"🏰 Pohádky",icon:"⛏️"},
+  {id:"ph02",question:"Co se stane s Popelčiným kočárem o půlnoci?",answer:"Změní se zpátky v dýni",hint:"A střevíček zůstal na schodech",category:"🏰 Pohádky",icon:"🥿"},
+  {id:"ph03",question:"Jak se jmenuje čaroděj záporák z pohádky Arabela?",answer:"Rumburak",hint:"Arabelin nepřítel v černém",category:"🏰 Pohádky",icon:"🧙"},
+  {id:"ph04",question:"Kde bydleli pohádkový skřítci Křemílek a Vochomůrka?",answer:"V houbě",hint:"Malinký domek v lese",category:"🏰 Pohádky",icon:"🍄"},
+  {id:"ph05",question:"Jak se jmenuje česká pohádka o dívce, která dostane tři oříšky?",answer:"Tři oříšky pro Popelku",hint:"Natočena v roce 1973",category:"🏰 Pohádky",icon:"👸"},
+];
+
+function loadBuiltinQuestions() {
+  let added = 0;
+  BUILTIN_QUESTIONS.forEach(q => { if (!questionBank.find(b => b.question === q.question)) { questionBank.push(q); added++; } });
+  saveBank(); renderBank(); updateBankStats(); toast(`+${added} otázek přidáno ✓`);
+}
+
+function addManualQuestion() {
+  const text = document.getElementById('mq-text').value.trim();
+  if (!text) { toast('Zadej text otázky!'); return; }
+  const q = { id: Math.random().toString(36).slice(2,7), question: text, answer: document.getElementById('mq-ans').value.trim(), hint: document.getElementById('mq-hint').value.trim(), category: document.getElementById('mq-cat').value.trim() || 'Vlastní', icon: document.getElementById('mq-icon').value.trim() || '❓' };
+  questionBank.push(q); saveBank(); renderBank(); updateBankStats();
+  ['mq-text','mq-ans','mq-cat','mq-hint'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('mq-icon').value = '❓';
+  toast('Otázka přidána ✓');
+}
+
+function deleteBankQuestion(id) {
+  questionBank = questionBank.filter(q => q.id !== id); saveBank(); renderBank(); updateBankStats();
+}
+
+function renderBank() {
+  const el = document.getElementById('bank-list');
+  document.getElementById('bank-count-badge').textContent = questionBank.length ? `(${questionBank.length})` : '';
+  if (!questionBank.length) { el.innerHTML = '<div class="cp-empty"><div class="icon">🎲</div>Banka je prázdná.<br>Načti vestavěné otázky nebo přidej vlastní.</div>'; return; }
+  el.innerHTML = [...questionBank].reverse().map(q => `
+    <div class="bq-item">
+      <div class="bq-icon">${q.icon || '❓'}</div>
+      <div class="bq-body">
+        <div class="bq-cat">${esc(q.category || '')}</div>
+        <div class="bq-text">${esc(q.question)}</div>
+        ${q.answer ? `<div class="bq-ans">✓ ${esc(q.answer)}</div>` : ''}
+        ${q.hint ? `<div class="bq-hint">💡 ${esc(q.hint)}</div>` : ''}
+      </div>
+      <button class="btn-icon" onclick="deleteBankQuestion('${q.id}')" title="Smazat">🗑️</button>
+    </div>`).join('');
+}
+
+function updateBankStats() {
+  document.getElementById('bank-total').textContent = questionBank.length;
+  document.getElementById('bank-cats').textContent = new Set(questionBank.map(q => q.category)).size;
+  document.getElementById('bank-with-ans').textContent = questionBank.filter(q => q.answer).length;
+}
+
+function clearBank() {
+  if (!confirm('Opravdu smazat celou banku otázek?')) return;
+  questionBank = []; saveBank(); renderBank(); updateBankStats(); toast('Banka vymazána');
+}
+
+// ── TRACKING ──
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-pane').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'checkpoints' && adminMap) setTimeout(() => adminMap.invalidateSize(), 50);
+  if (name === 'tracking') { initTrackMap(); loadTeams(); }
+}
+
+function initTrackMap() {
+  if (trackMap) { setTimeout(() => trackMap.invalidateSize(), 50); return; }
+  trackMap = L.map('track-map', { zoomControl: true }).setView([49.54239, 14.17776], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM', maxZoom: 19 }).addTo(trackMap);
+  questions.forEach((q, i) => {
+    const icon = L.divIcon({ className: '', html: `<div style="width:28px;height:28px;background:#2563eb;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${q.markerIcon||'📍'}</div>`, iconSize:[28,28], iconAnchor:[14,14] });
+    L.marker([q.lat, q.lng], { icon }).addTo(trackMap).bindTooltip(`#${i+1}`, { permanent: true, direction: 'top' });
+  });
+}
+
+async function loadTeams() {
+  const el = document.getElementById('teams-list');
+  el.innerHTML = '<div class="track-empty">Načítám...</div>';
+  const teams = {};
+  try {
+    const res = await fetch(`${WORKER_URL}/scores?gameId=${GAME_ID}`);
+    if (res.ok) { const data = await res.json(); if (data.teams) data.teams.filter(t => t.score >= 0).forEach(t => { teams[t.team] = t; }); }
+  } catch(e) {}
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k) continue;
+    if (k.startsWith('bojovka_lb_')) {
+      try { const entry = JSON.parse(localStorage.getItem(k)); if (entry && entry.team && !teams[entry.team]) teams[entry.team] = entry; } catch(e) {}
+    } else if (k.startsWith('bojovka_progress_')) {
+      const tName = k.replace('bojovka_progress_', '');
+      if (tName && !teams[tName]) {
+        try { const prog = JSON.parse(localStorage.getItem(k) || '{}'); teams[tName] = { team: tName, score: Object.values(prog).reduce((s,p)=>s+(p.pts||0),0), checkpoints: Object.values(prog).filter(p=>p.lastAnswered).length, updated: 0 }; } catch(e) {}
+      }
+    }
+  }
+  const sorted = Object.values(teams).sort((a,b) => b.score - a.score || b.checkpoints - a.checkpoints);
+  document.getElementById('teams-count').textContent = sorted.length ? `(${sorted.length})` : '';
+  if (!sorted.length) { el.innerHTML = '<div class="track-empty">Zatím žádné týmy.<br><br>Hráči musí otevřít hru a zadat jméno týmu.</div>'; return; }
+  el.innerHTML = sorted.map((t, i) => `
+    <div class="team-card">
+      <div class="team-rank">${i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.'}</div>
+      <div class="team-body"><div class="team-name">${esc(t.team)}</div><div class="team-meta">${t.checkpoints} checkpointů splněno</div></div>
+      <div class="team-score">${t.score} b</div>
+      <button class="btn btn-danger btn-sm" style="margin-left:8px;flex-shrink:0" onclick="deleteTeam('${esc(t.team)}')">✕</button>
+    </div>`).join('');
+}
+
+async function deleteTeam(teamName) {
+  if (!confirm(`Smazat tým "${teamName}"?`)) return;
+  try {
+    const res = await fetch(`${WORKER_URL}/team?gameId=${GAME_ID}&team=${encodeURIComponent(teamName)}&secret=${ADMIN_SECRET}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Worker chyba');
+  } catch(e) { toast('⚠ Worker: ' + e.message); return; }
+  ['bojovka_lb_', 'bojovka_progress_', 'bojovka_streak_'].forEach(prefix => localStorage.removeItem(prefix + teamName));
+  toast(`Tým "${teamName}" smazán ✓`);
+  setTimeout(() => loadTeams(), 300);
+}
+
+async function resetScores() {
+  if (!confirm('Opravdu smazat všechna skóre ze serveru i z tohoto zařízení?')) return;
+  try {
+    const res = await fetch(`${WORKER_URL}/scores?gameId=${GAME_ID}&secret=${ADMIN_SECRET}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Worker chyba');
+    toast(`✓ Worker: smazáno ${data.deleted || 0} záznamů`);
+  } catch(e) { toast('⚠ Worker: ' + e.message); }
+  const toDelete = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && (k.startsWith('bojovka_lb_') || k.startsWith('bojovka_progress_') || k.startsWith('bojovka_streak_') || k.startsWith('bojovka_speed_') || k === 'bojovka_visits')) toDelete.push(k);
+  }
+  toDelete.forEach(k => localStorage.removeItem(k));
+  toast(`✓ Lokálně smazáno ${toDelete.length} klíčů`);
+  setTimeout(() => loadTeams(), 500);
+}
+
+// ── EXPORT / IMPORT ──
+function exportAll() {
+  const blob = new Blob([JSON.stringify({ questions, progress, questionBank }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'bojovka_full.json'; a.click();
+}
+
+function exportBank() {
+  const blob = new Blob([JSON.stringify({ questionBank }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'bojovka_bank.json'; a.click();
+}
+
+function importData(ev) {
+  const file = ev.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.questions) { questions = data.questions; saveQ(); }
+      if (data.progress)  { progress = data.progress; saveP(); }
+      if (data.questionBank) { questionBank = data.questionBank; saveBank(); }
+      Object.values(adminMarkers).forEach(m => adminMap.removeLayer(m)); adminMarkers = {};
+      questions.forEach((q, i) => addAdminMarker(q, i + 1));
+      renderList(); renderBank(); updateBankStats(); toast('Importováno ✓');
+    } catch { toast('Chyba při importu'); }
+  };
+  r.readAsText(file); ev.target.value = '';
+}
+
+function resetProgress() {
+  if (!confirm('Reset postupu hráčů?')) return;
+  progress = {}; saveP(); localStorage.removeItem('bojovka_visits'); toast('Postup resetován');
+}
+
+function resetAll() {
+  if (!confirm('Opravdu smazat VEŠKERÁ data?')) return;
+  questions = []; progress = {}; questionBank = []; saveQ(); saveP(); saveBank();
+  Object.values(adminMarkers).forEach(m => adminMap.removeLayer(m)); adminMarkers = {};
+  renderList(); renderBank(); updateBankStats(); toast('Vše smazáno');
+}
+
+// ── PERSIST ──
+function saveQ()    { localStorage.setItem(STORAGE_KEY,  JSON.stringify(questions)); }
+function saveP()    { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); }
+function saveBank() { localStorage.setItem(QBANK_KEY,    JSON.stringify(questionBank)); }
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function toast(msg) {
+  const el = document.getElementById('toast'); el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+init();
+</script>
+</body>
+</html>

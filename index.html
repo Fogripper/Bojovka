@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>BOJOVKA.EXE</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --navy:#0a0a2e;--navy2:#12124a;--blue:#1a1aff;--cyan:#00e5ff;
+  --red:#ff1a1a;--red2:#cc0000;--yellow:#ffe600;--white:#ffffff;
+  --gray:#8888aa;--black:#000000;--green:#00ff66;
+}
+body{font-family:'Press Start 2P',monospace;background:var(--navy);color:var(--white);min-height:100vh;overflow-x:hidden;}
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(to bottom,transparent 0px,transparent 2px,rgba(0,0,0,0.12) 2px,rgba(0,0,0,0.12) 4px);}
+
+/* ── HEADER ── */
+header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;display:flex;align-items:stretch;justify-content:space-between;position:sticky;top:0;z-index:1000;}
+.logo{padding:10px 14px;}
+.logo-title{font-size:11px;color:var(--yellow);letter-spacing:1px;text-shadow:2px 2px 0 var(--black);}
+.logo-sub{font-size:6px;color:var(--white);letter-spacing:1px;margin-top:3px;opacity:.8;}
+.header-right{display:flex;align-items:stretch;}
+.admin-link{font-family:'Press Start 2P',monospace;font-size:7px;color:var(--navy);text-decoration:none;background:var(--yellow);border-left:4px solid var(--black);padding:0 12px;display:flex;align-items:center;}
+.admin-link:hover{background:var(--white);}
+
+/* ── MAP ── */
+#map-wrap{position:relative;}
+#map{width:100%;height:calc(100vh - 58px);}
+.status-bar{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--navy);border:3px solid var(--cyan);padding:6px 12px;font-size:7px;color:var(--cyan);letter-spacing:1px;white-space:nowrap;text-shadow:0 0 8px var(--cyan);}
+.status-bar.warn{border-color:var(--yellow);color:var(--yellow);text-shadow:0 0 8px var(--yellow);}
+.status-bar.error{border-color:var(--red);color:var(--red);text-shadow:0 0 8px var(--red);}
+
+/* ── SCORE PANEL ── */
+.score-panel{position:absolute;bottom:70px;right:10px;z-index:500;background:rgba(10,10,46,.95);border:3px solid var(--yellow);padding:8px 10px;min-width:90px;cursor:pointer;}
+.score-panel .team-name{font-size:6px;color:var(--cyan);margin-bottom:3px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px;}
+.score-panel .slabel{font-size:5px;color:var(--yellow);margin-bottom:3px;display:block;}
+.score-panel .svalue{font-size:16px;color:var(--white);line-height:1;text-shadow:2px 2px 0 var(--red2);}
+.score-panel .refresh-hint{font-size:5px;color:var(--gray);margin-top:4px;display:block;}
+
+/* STREAK INDIKÁTOR */
+.streak-wrap{display:flex;align-items:center;justify-content:center;margin-top:5px;min-height:22px;}
+.streak-fire{font-size:16px;line-height:1;transition:all .3s;}
+.streak-fire.cold{opacity:.25;filter:grayscale(1);font-size:14px;}
+.streak-fire.warm{opacity:.7;font-size:16px;}
+.streak-fire.hot{opacity:1;font-size:20px;animation:fireburn .6s ease-in-out infinite alternate;filter:drop-shadow(0 0 6px #ff6600);}
+.streak-fire.inferno{opacity:1;font-size:24px;animation:fireburn .35s ease-in-out infinite alternate;filter:drop-shadow(0 0 12px #ff3300) drop-shadow(0 0 20px #ff6600);}
+@keyframes fireburn{
+  from{transform:scale(1) rotate(-3deg);}
+  to{transform:scale(1.15) rotate(3deg);}
+}
+.streak-num{font-family:'Press Start 2P',monospace;font-size:7px;color:var(--yellow);margin-left:3px;line-height:1;}
+.streak-num.hot{color:#ff6600;text-shadow:0 0 8px #ff6600;}
+.streak-num.inferno{color:#ff3300;text-shadow:0 0 12px #ff3300,0 0 4px #ffaa00;}
+
+/* ── MARKERS ── */
+.px-marker{width:40px!important;height:40px!important;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;image-rendering:pixelated;background:var(--red);border:3px solid var(--yellow);outline:2px solid var(--black);box-shadow:3px 3px 0 var(--black);position:relative;}
+.px-marker .m-num{position:absolute;bottom:-2px;right:1px;font-family:'Press Start 2P',monospace;font-size:6px;color:var(--yellow);text-shadow:1px 1px 0 var(--black);line-height:1;}
+.px-marker.locked{background:var(--navy2)!important;border-color:var(--gray)!important;box-shadow:none!important;filter:grayscale(1);cursor:default;}
+.px-marker.locked .m-num{color:var(--gray);}
+.px-marker.answered{background:var(--navy2);border-color:var(--gray);box-shadow:none;filter:grayscale(0.7);}
+.px-marker.answered .m-num{color:var(--gray);}
+.px-marker.nearby{background:var(--yellow);border-color:var(--white);box-shadow:3px 3px 0 var(--black),0 0 18px var(--yellow);animation:blink8 .4s step-end infinite;}
+.px-marker.nearby .m-num{color:var(--black);}
+@keyframes blink8{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ── LOGIN SCREEN ── */
+.screen{display:none;position:fixed;inset:0;background:var(--navy);z-index:5000;align-items:center;justify-content:center;padding:20px;}
+.screen.show{display:flex;}
+.login-box{background:var(--navy2);border:4px solid var(--yellow);padding:28px 24px;max-width:360px;width:100%;box-shadow:8px 8px 0 var(--black);}
+.login-title{font-size:14px;color:var(--yellow);text-shadow:2px 2px 0 var(--black);margin-bottom:6px;text-align:center;}
+.login-sub{font-family:'VT323',monospace;font-size:18px;color:var(--gray);text-align:center;margin-bottom:20px;}
+.login-input{width:100%;background:var(--navy);border:3px solid var(--white);color:var(--white);font-family:'Press Start 2P',monospace;font-size:10px;padding:12px;outline:none;caret-color:var(--cyan);margin-bottom:12px;text-align:center;letter-spacing:2px;}
+.login-input:focus{border-color:var(--cyan);}
+.login-input::placeholder{color:var(--gray);font-size:8px;letter-spacing:1px;}
+.login-btn{font-family:'Press Start 2P',monospace;font-size:10px;padding:14px;background:var(--red);color:var(--white);border:3px solid var(--yellow);cursor:pointer;width:100%;text-shadow:1px 1px 0 var(--black);box-shadow:4px 4px 0 var(--black);transition:background .1s;}
+.login-btn:hover{background:var(--red2);}
+.login-btn:active{transform:translate(3px,3px);box-shadow:none;}
+
+/* ── LEADERBOARD OVERLAY ── */
+.lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,5,.95);z-index:3000;align-items:center;justify-content:center;padding:16px;}
+.lb-overlay.show{display:flex;}
+.lb-box{background:var(--navy2);border:4px solid var(--yellow);max-width:400px;width:100%;box-shadow:8px 8px 0 var(--black);overflow:hidden;}
+.lb-header{background:var(--yellow);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;}
+.lb-title{font-size:10px;color:var(--black);text-shadow:none;}
+.lb-close{font-family:'Press Start 2P',monospace;font-size:8px;background:var(--black);color:var(--yellow);border:none;padding:4px 8px;cursor:pointer;}
+.lb-body{padding:14px;}
+.lb-row{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px;border:2px solid var(--navy);}
+.lb-row.me{border-color:var(--cyan);}
+.lb-row.rank-1{border-color:var(--yellow);background:rgba(255,230,0,.05);}
+.lb-pos{font-size:14px;font-family:'VT323',monospace;color:var(--gray);min-width:24px;}
+.lb-row.rank-1 .lb-pos{color:var(--yellow);}
+.lb-name{flex:1;font-size:7px;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lb-row.me .lb-name{color:var(--cyan);}
+.lb-pts{font-size:14px;font-family:'VT323',monospace;color:var(--green);}
+.lb-cp{font-size:6px;color:var(--gray);margin-top:2px;}
+.lb-empty{font-family:'VT323',monospace;font-size:18px;color:var(--gray);text-align:center;padding:20px;}
+.lb-refresh{font-family:'Press Start 2P',monospace;font-size:7px;padding:10px;background:var(--blue);color:var(--white);border:2px solid var(--cyan);cursor:pointer;width:100%;margin-top:8px;}
+.lb-refresh:hover{background:var(--navy);}
+.lb-updated{font-size:6px;color:var(--gray);text-align:center;margin-top:6px;}
+
+/* ── QUESTION OVERLAY ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,5,.92);z-index:2000;align-items:center;justify-content:center;padding:16px;}
+.overlay.show{display:flex;}
+.q-card{background:var(--navy2);border:4px solid var(--white);outline:3px solid var(--blue);max-width:440px;width:100%;box-shadow:8px 8px 0 var(--black);overflow:hidden;}
+.q-card-header{background:var(--blue);border-bottom:4px solid var(--cyan);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;}
+.q-num{font-size:7px;color:var(--yellow);letter-spacing:2px;text-shadow:1px 1px 0 var(--black);}
+.q-close-btn{font-family:'Press Start 2P',monospace;font-size:8px;background:var(--red);color:var(--white);border:2px solid var(--white);padding:4px 8px;cursor:pointer;}
+.q-body{padding:16px 14px;}
+.q-icon{font-size:32px;margin-bottom:8px;display:block;text-align:center;}
+.q-cat{font-size:6px;color:var(--cyan);letter-spacing:2px;margin-bottom:8px;text-align:center;}
+.q-text{font-family:'VT323',monospace;font-size:24px;color:var(--white);line-height:1.3;margin-bottom:14px;min-height:56px;}
+.q-hint-box{background:var(--navy);border:2px solid var(--cyan);border-left:4px solid var(--cyan);padding:6px 10px;font-family:'VT323',monospace;font-size:17px;color:var(--cyan);margin-bottom:12px;display:none;}
+.q-hint-box.show{display:block;}
+.q-input{width:100%;background:var(--navy);border:3px solid var(--white);color:var(--white);font-family:'Press Start 2P',monospace;font-size:9px;padding:10px;margin-bottom:12px;outline:none;caret-color:var(--cyan);}
+.q-input:focus{border-color:var(--cyan);}
+.q-input::placeholder{color:var(--gray);font-size:7px;}
+.btn-ok{font-family:'Press Start 2P',monospace;font-size:9px;padding:12px 14px;background:var(--red);color:var(--white);border:3px solid var(--yellow);cursor:pointer;width:100%;text-shadow:1px 1px 0 var(--black);box-shadow:3px 3px 0 var(--black);transition:background .1s;}
+.btn-ok:hover{background:var(--red2);}
+.btn-ok:active{transform:translate(2px,2px);box-shadow:none;}
+.q-result{margin-top:12px;font-family:'VT323',monospace;font-size:20px;padding:8px 10px;display:none;border:3px solid;text-align:center;}
+.q-result.correct{display:block;color:var(--yellow);border-color:var(--yellow);background:rgba(255,230,0,.1);text-shadow:0 0 10px var(--yellow);}
+.q-result.wrong{display:block;color:var(--red);border-color:var(--red);background:rgba(255,26,26,.1);}
+.q-result.open{display:block;color:var(--cyan);border-color:var(--cyan);background:rgba(0,229,255,.08);}
+.q-counter{font-size:6px;color:var(--gray);text-align:right;margin-top:6px;letter-spacing:1px;}
+.btn-hint{font-family:'Press Start 2P',monospace;font-size:7px;padding:7px 12px;background:transparent;color:var(--yellow);border:2px solid var(--yellow);cursor:pointer;width:100%;margin-bottom:10px;letter-spacing:0;transition:all .1s;}
+.btn-hint:hover{background:rgba(255,230,0,.1);}
+.btn-hint:disabled{opacity:.4;cursor:not-allowed;}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--navy2);border:3px solid var(--yellow);color:var(--yellow);font-size:8px;padding:10px 16px;z-index:9998;transition:transform .2s;white-space:nowrap;text-shadow:0 0 8px var(--yellow);}
+.toast.show{transform:translateX(-50%) translateY(0);}
+/* Zoom tlačítka pod headerem */
+.leaflet-top.leaflet-left { top: 68px !important; }
+.leaflet-control-zoom a{font-family:'Press Start 2P',monospace!important;background:var(--navy2)!important;color:var(--white)!important;border:2px solid var(--blue)!important;width:36px!important;height:36px!important;line-height:34px!important;font-size:16px!important;}
+.leaflet-control-zoom a:hover{background:var(--blue)!important;}
+.leaflet-control-attribution{font-size:9px!important;background:rgba(10,10,46,.85)!important;color:var(--gray)!important;}
+
+/* Leaderboard — větší na mobilu */
+.lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,5,.95);z-index:3000;align-items:flex-end;justify-content:center;padding:0;}
+.lb-overlay.show{display:flex;}
+.lb-box{background:var(--navy2);border:4px solid var(--yellow);border-bottom:none;width:100%;max-width:100%;box-shadow:none;overflow:hidden;border-radius:16px 16px 0 0;max-height:88vh;display:flex;flex-direction:column;}
+.lb-header{background:var(--yellow);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.lb-title{font-size:14px;color:var(--black);text-shadow:none;}
+.lb-close{font-family:'Press Start 2P',monospace;font-size:10px;background:var(--black);color:var(--yellow);border:none;padding:6px 10px;cursor:pointer;}
+.lb-body{padding:16px;overflow-y:auto;flex:1;}
+.lb-row{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:8px;border:2px solid var(--navy);border-radius:4px;}
+.lb-row.me{border-color:var(--cyan);}
+.lb-row.rank-1{border-color:var(--yellow);background:rgba(255,230,0,.05);}
+.lb-pos{font-size:22px;font-family:'VT323',monospace;color:var(--gray);min-width:32px;}
+.lb-row.rank-1 .lb-pos{color:var(--yellow);}
+.lb-name{flex:1;font-size:11px;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lb-row.me .lb-name{color:var(--cyan);}
+.lb-pts{font-size:28px;font-family:'VT323',monospace;color:var(--green);white-space:nowrap;}
+.lb-cp{font-size:9px;color:var(--gray);margin-top:2px;}
+.lb-refresh{font-family:'Press Start 2P',monospace;font-size:9px;padding:14px;background:var(--blue);color:var(--white);border:2px solid var(--cyan);cursor:pointer;width:100%;margin-top:4px;}
+.lb-refresh:hover{background:var(--navy);}
+.lb-updated{font-size:9px;color:var(--gray);text-align:center;margin-top:8px;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="screen show" id="login-screen">
+  <div class="login-box">
+    <div class="login-title">BOJOVKA.EXE</div>
+    <div class="login-sub" id="login-sub-text">Zadej jméno svého týmu</div>
+    <input class="login-input" type="text" id="team-input" placeholder="NAZEV TYMU..." maxlength="20"
+      onkeydown="if(event.key==='Enter')startGame()">
+    <div id="login-status" style="font-family:VT323,monospace;font-size:16px;color:var(--cyan);text-align:center;margin-bottom:8px;min-height:20px;"></div>
+    <button class="login-btn" id="btn-start" onclick="startGame()">► START GAME</button>
+    <button class="login-btn" id="btn-change-team" onclick="changeTeam()"
+      style="display:none;margin-top:8px;background:var(--navy2);border-color:var(--gray);font-size:8px;padding:10px">
+      ↺ POKRAČOVAT JAKO <span id="btn-team-name"></span>
+    </button>
+  </div>
+</div>
+
+<header>
+  <div class="logo">
+    <div class="logo-title">BOJOVKA.EXE</div>
+    <div class="logo-sub" id="header-team">► INSERT COIN</div>
+  </div>
+  <div class="header-right">
+    <button onclick="showLogin()" style="font-family:'Press Start 2P',monospace;font-size:6px;color:var(--gray);background:transparent;border:none;padding:0 12px;cursor:pointer;height:100%">↺ TÝM</button>
+  </div>
+</header>
+
+<div id="map-wrap">
+  <div id="status-bar" class="status-bar">HLEDAM POLOHU...</div>
+  <div id="map"></div>
+  <div class="score-panel" onclick="openLeaderboard()">
+    <span class="team-name" id="sp-team">—</span>
+    <span style="font-size:5px;display:block;margin-bottom:3px;" id="sp-route"></span>
+    <span class="slabel">SCORE</span>
+    <span class="svalue" id="score-val">0</span>
+    <div class="streak-wrap" id="streak-wrap" style="display:none">
+      <span class="streak-fire cold" id="streak-fire">🔥</span>
+      <span class="streak-num" id="streak-num">0</span>
+    </div>
+    <span class="refresh-hint">TAP = TABULKA</span>
+  </div>
+</div>
+
+<!-- QUESTION OVERLAY -->
+<div class="overlay" id="overlay">
+  <div class="q-card">
+    <div class="q-card-header">
+      <div class="q-num" id="q-num">CHECKPOINT #01</div>
+      <button class="q-close-btn" onclick="closeOverlay()">✕</button>
+    </div>
+    <div class="q-body">
+      <span class="q-icon" id="q-icon">❓</span>
+      <div class="q-cat" id="q-cat">KATEGORIE</div>
+      <div class="q-text" id="q-text">...</div>
+      <button class="btn-hint" id="q-hint-btn" onclick="revealHint()" style="display:none">💡 NÁPOVĚDA (-1 BOD)</button>
+      <div class="q-hint-box" id="q-hint"></div>
+      <input class="q-input" type="text" id="q-input" placeholder="TVOJE ODPOVĚĎ...">
+      <button class="btn-ok" id="q-btn" onclick="submitAnswer()">► POTVRDIT</button>
+      <div class="q-result" id="q-result"></div>
+      <div class="q-counter" id="q-counter"></div>
+    </div>
+  </div>
+</div>
+
+<!-- LEADERBOARD -->
+<div class="lb-overlay" id="lb-overlay">
+  <div class="lb-box">
+    <div class="lb-header">
+      <div class="lb-title">LEADERBOARD</div>
+      <button class="lb-close" onclick="closeLeaderboard()">✕</button>
+    </div>
+    <div class="lb-body">
+      <div id="lb-list" class="lb-empty">Načítám...</div>
+      <button class="lb-refresh" onclick="refreshLeaderboard()">↺ AKTUALIZOVAT</button>
+      <div class="lb-updated" id="lb-updated"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY  = 'bojovka_questions';
+const PROGRESS_KEY = 'bojovka_progress';
+const QBANK_KEY    = 'bojovka_qbank';
+const TEAM_KEY     = 'bojovka_team';
+const ROUTE_KEY    = 'bojovka_route';
+const WORKER_URL   = 'https://bojovka-worker.valapavel99.workers.dev';
+const GAME_ID      = 'orlik2025';
+const GPS_THRESHOLD = 50;
+const BASE_POINTS   = 3;
+const STREAK_EVERY  = 3;
+const STREAK_BONUS  = 2;
+
+// ── TRASY ──
+// Všechny checkpointy (stávající + nové)
+const ALL_CHECKPOINTS = [
+  {id:"mpycpbd9js69",lat:49.543977,lng:14.175043,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpycpj9f9hk5",lat:49.543709,lng:14.177347,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpycpm14xbji",lat:49.542226,lng:14.174359,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpycpokewr3d",lat:49.542337,lng:14.178157,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpycpqidvks4",lat:49.542922,lng:14.180474,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpycpsonxk8h",lat:49.541613,lng:14.179809,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpycpv6usxxm",lat:49.54114,lng:14.181333,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpycpws2w98x",lat:49.540068,lng:14.180925,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpycq2aknuxx",lat:49.537812,lng:14.180367,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpycq3uqsqvw",lat:49.53997,lng:14.18247,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpycq5ycsqua",lat:49.536949,lng:14.18247,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpycqufikmrd",lat:49.54048817042011,lng:14.17728800110108,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj3efc4ddx",lat:49.538634,lng:14.185817,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj3ha5i7yq",lat:49.53564,lng:14.179616,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj3jez6hul",lat:49.534595,lng:14.180088,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj3l4b7buv",lat:49.537715,lng:14.187148,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj3n1b8a70",lat:49.540291,lng:14.185281,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj3qpfm8br",lat:49.539594,lng:14.179723,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj3snz3or3",lat:49.541697,lng:14.177105,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj3ug00jdg",lat:49.540459,lng:14.179375,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj3vthyq19",lat:49.538467,lng:14.179169,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj3x16laxf",lat:49.53713,lng:14.179466,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj42qc6ib2",lat:49.536837,lng:14.181054,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj45685jpf",lat:49.536809,lng:14.183929,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj466imx6s",lat:49.536808,lng:14.186323,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj48e5wdrj",lat:49.539525,lng:14.185152,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""},
+  {id:"mpyj49zfr3gx",lat:49.537742,lng:14.185195,radius:30,points:3,markerIcon:"📍",text:"",answer:"",hint:""}
+];
+
+// Definice tras — pole ID checkpointů
+const ROUTES = [
+  { id:'A', name:'TRASA ALFA',  color:'#00e5ff', checkpoints:["mpycpbd9js69","mpycpj9f9hk5","mpycpokewr3d","mpyj3snz3or3","mpycqufikmrd","mpyj3ug00jdg","mpyj3qpfm8br","mpycpsonxk8h","mpycpm14xbji"] },
+  { id:'B', name:'TRASA BETA',  color:'#ff1a1a', checkpoints:["mpycpqidvks4","mpycpv6usxxm","mpycpws2w98x","mpycq3uqsqvw","mpycq2aknuxx","mpyj3x16laxf","mpyj3vthyq19","mpyj3ha5i7yq","mpyj3jez6hul"] },
+  { id:'C', name:'TRASA GAMA',  color:'#00ff66', checkpoints:["mpyj3n1b8a70","mpyj48e5wdrj","mpyj3efc4ddx","mpyj49zfr3gx","mpyj466imx6s","mpyj3l4b7buv","mpyj45685jpf","mpycq5ycsqua","mpyj42qc6ib2"] },
+];
+
+let questions = [], progress = {}, QUESTION_BANK = [];
+let userLat = null, userLng = null;
+let map, userMarker, accuracyCircle;
+let markers = {};
+let activeQuestion = null, activeQBankQ = null;
+let nearbyNotified = new Set();
+let teamName = '';
+let routeIndex = 0;
+let totalScore = 0;
+let streakCount = 0;
+
+const BUILTIN_QUESTIONS = [
+  {id:"cz01",question:"Jak se jmenoval maskot České pojišťovny — animovaný zelený tvor?",answer:"Rákosníček",hint:"Skřítek z pohádky, zelený, bydlí u vody",category:"🇨🇿 Česká popkultura",icon:"📺"},
+  {id:"cz02",question:"Který český zpěvák je známý hity Holka modrooká a Nonstop?",answer:"Michal David",hint:"Král 90s diskoték",category:"🇨🇿 Česká popkultura",icon:"🎵"},
+  {id:"cz03",question:"Jak se jmenuje pohádkový záporák seriálu Arabela?",answer:"Rumburak",hint:"Čaroděj v černém plášti",category:"🇨🇿 Česká popkultura",icon:"🏰"},
+  {id:"cz04",question:"Z jakého města pocházel loupežník Rumcajs?",answer:"Jičín",hint:"Podkrkonoší",category:"🇨🇿 Česká popkultura",icon:"🪓"},
+  {id:"cz05",question:"Jaká česká punk kapela zpívala Tři čuníci?",answer:"Tři sestry",hint:"Pražská punk legenda",category:"🇨🇿 Česká popkultura",icon:"🐷"},
+  {id:"cz06",question:"Jak se jmenují čtyři hrdinové komiksu Čtyřlístek?",answer:"Myšpulín, Fifinka, Pinďa, Bobík",hint:"Každý má jiný charakter",category:"🇨🇿 Česká popkultura",icon:"🍀"},
+  {id:"cz07",question:"Který český herec a scenárista hrál divadelní postavy Járy Cimrmana?",answer:"Zdeněk Svěrák",hint:"Napsal také film Kolja",category:"🇨🇿 Česká popkultura",icon:"🎭"},
+  {id:"cz08",question:"Jaký nápoj je českou alternativou Coca-Coly?",answer:"Kofola",hint:"Vyráběla se od dob komunismu",category:"🇨🇿 Česká popkultura",icon:"🥤"},
+  {id:"cz09",question:"Kdo byl prvním prezidentem České republiky?",answer:"Václav Havel",hint:"Byl to dramatik a disident",category:"🇨🇿 Česká popkultura",icon:"🇨🇿"},
+  {id:"cz10",question:"Kde bydleli pohádkoví skřítci Křemílek a Vochomůrka?",answer:"V houbě",hint:"Takový malý domek",category:"🇨🇿 Česká popkultura",icon:"🍄"},
+  {id:"cz11",question:"Jak se jmenuje záporná postava pohádky Tři oříšky pro Popelku?",answer:"Macecha",hint:"Zlá náhradní matka",category:"🇨🇿 Česká popkultura",icon:"👸"},
+  {id:"cz12",question:"Jaký sport hrál Dominik Hašek, který dovedl Česko ke zlaté na OH 1998?",answer:"Hokej",hint:"Chytal jako bůh v Naganu",category:"🇨🇿 Česká popkultura",icon:"🏒"},
+  {id:"vg01",question:"Jak se jmenuje princezna, kterou zachraňuje Mario?",answer:"Peach",hint:"Je růžová a vládne Houbovému království",category:"🎮 Videohry",icon:"🎮"},
+  {id:"vg02",question:"Jak se jmenuje slavný kód (nahoru nahoru dolů dolů...) ze hry Contra?",answer:"Konami kód",hint:"Dával 30 životů",category:"🎮 Videohry",icon:"🕹️"},
+  {id:"vg03",question:"Který Pokémon nese číslo 001 v Národním Pokédexu?",answer:"Bulbasaur",hint:"Trávo-jedový typ, má na zádech cibuli",category:"🎮 Videohry",icon:"🌿"},
+  {id:"vg04",question:"Jak se jmenuje hlavní záporák ve hře The Legend of Zelda?",answer:"Ganon",hint:"Také znám jako Ganondorf",category:"🎮 Videohry",icon:"🗡️"},
+  {id:"vg05",question:"V jakém roce vyšel první Game Boy?",answer:"1989",hint:"Stejný rok jako sametová revoluce",category:"🎮 Videohry",icon:"🕹️"},
+  {id:"vg06",question:"Jak se jmenuje modrý ježek, maskot firmy Sega?",answer:"Sonic",hint:"Běží hodně rychle",category:"🎮 Videohry",icon:"💙"},
+  {id:"vg07",question:"Co se sbírá ve hře Pac-Man?",answer:"Tečky",hint:"A vyhýbá se duchům",category:"🎮 Videohry",icon:"👻"},
+  {id:"vg08",question:"Jak se jmenuje hlavní hrdinka hry Tomb Raider?",answer:"Lara Croft",hint:"Archeologka s copánky",category:"🎮 Videohry",icon:"🏺"},
+  {id:"vg09",question:"Na jaké konzoli vyšlo jako první GTA III?",answer:"PlayStation 2",hint:"Šedá krabice s DVD",category:"🎮 Videohry",icon:"🚗"},
+  {id:"vg10",question:"Jak se jmenuje záporák hry Mortal Kombat, který říká Finish him?",answer:"Shao Kahn",hint:"Vládce Outworld",category:"🎮 Videohry",icon:"💀"},
+  {id:"an01",question:"Jaký je originální japonský název Astroboye?",answer:"Tetsuwan Atom",hint:"Atomový chlapec",category:"🌸 Anime",icon:"🤖"},
+  {id:"an02",question:"Kdo je autor mangy Astroboy?",answer:"Osamu Tezuka",hint:"Říká se mu Bůh mangy",category:"🌸 Anime",icon:"✏️"},
+  {id:"an03",question:"Jak se jmenuje hlavní záporák Dragon Ball Z, který se dokáže transformovat?",answer:"Freeza",hint:"Studený jako led, vládce vesmíru",category:"🌸 Anime",icon:"🐉"},
+  {id:"an04",question:"Jak se jmenuje Ash Ketchumův první Pokémon?",answer:"Pikachu",hint:"Žlutý, elektrický",category:"🌸 Anime",icon:"⚡"},
+  {id:"an05",question:"Z jakého města pochází Sailor Moon?",answer:"Tokio",hint:"Brání ho Sailor guardians",category:"🌸 Anime",icon:"🌙"},
+  {id:"an06",question:"Jak se jmenuje nindža v oranžovém dresu z anime Naruto?",answer:"Naruto Uzumaki",hint:"Sní o tom stát se Hokagem",category:"🌸 Anime",icon:"🍜"},
+  {id:"an07",question:"V jakém anime je hlavní hrdina detektiv, který se zmenšil na dítě?",answer:"Detektiv Conan",hint:"Jinak také Case Closed",category:"🌸 Anime",icon:"🔍"},
+  {id:"an08",question:"Jak se jmenuje obří robot, který pilotuje Shinji Ikari?",answer:"Evangelion Unit-01",hint:"NGE — Neon Genesis Evangelion",category:"🌸 Anime",icon:"🤖"},
+  {id:"an09",question:"Jaké je skutečné jméno hrdiny Death Note, který píše jména do sešitu?",answer:"Light Yagami",hint:"Student, chce se stát bohem nového světa",category:"🌸 Anime",icon:"📓"},
+  {id:"an10",question:"Jak se jmenuje kapitán pirátů s kloboukem ze slámy v One Piece?",answer:"Monkey D. Luffy",hint:"Chce se stát Králem pirátů",category:"🌸 Anime",icon:"🏴‍☠️"},
+  {id:"pr01",question:"Jak se jmenuje největší dravý pták v ČR?",answer:"Orel skalní",hint:"Hnízdí ve skalách a horách",category:"🌿 Příroda",icon:"🦅"},
+  {id:"pr02",question:"Která houba má červený klobouk s bílými tečkami a je jedovatá?",answer:"Muchomůrka červená",hint:"V pohádkách na ní sedí skřítci",category:"🌿 Příroda",icon:"🍄"},
+  {id:"pr03",question:"Jak se jmenuje největší přírodní jezero v ČR?",answer:"Černé jezero",hint:"Leží na Šumavě",category:"🌿 Příroda",icon:"💧"},
+  {id:"pr04",question:"Jak se jmenuje přehrada, na které hrajeme tuto bojovku?",answer:"Orlík",hint:"Největší vodní nádrž v ČR na řece Vltavě",category:"🌿 Příroda",icon:"🌊"},
+  {id:"pr05",question:"Jak se jmenuje nejdelší řeka v ČR?",answer:"Vltava",hint:"Protéká Prahou",category:"🌿 Příroda",icon:"🏞️"},
+  {id:"pr06",question:"Jaký strom nese bodlavé ježky s kaštany uvnitř?",answer:"Kaštan koňský",hint:"Na podzim je sbíráme pod stromem",category:"🌿 Příroda",icon:"🌰"},
+  {id:"pr07",question:"Kolik let průměrně žije dub?",answer:"500 až 1000 let",hint:"Mnohem víc než člověk",category:"🌿 Příroda",icon:"🌳"},
+  {id:"pr08",question:"Jak se jmenuje největší kočkovitá šelma žijící v české přírodě?",answer:"Rys ostrovid",hint:"Má charakteristické licousy",category:"🌿 Příroda",icon:"🐆"},
+  {id:"wp01",question:"Jak se jmenoval zpěvák skupiny Queen?",answer:"Freddie Mercury",hint:"Zemřel v roce 1991",category:"🌍 Světová kultura",icon:"🎤"},
+  {id:"wp02",question:"Ve kterém roce vyšel film Titanic s Leonardem DiCapriem?",answer:"1997",hint:"Loď potopil ledovec",category:"🌍 Světová kultura",icon:"🚢"},
+  {id:"wp03",question:"Jak se jmenuje čarodějnický hrdina knih J. K. Rowlingové?",answer:"Harry Potter",hint:"Má jizvu na čele ve tvaru blesku",category:"🌍 Světová kultura",icon:"⚡"},
+  {id:"wp04",question:"Jaká americká kapela zpívala Smells Like Teen Spirit?",answer:"Nirvana",hint:"Zpěvák Kurt Cobain",category:"🌍 Světová kultura",icon:"🎸"},
+  {id:"wp05",question:"Ve které zemi se natáčela filmová trilogie Pán prstenů?",answer:"Nový Zéland",hint:"Hobiti žili v malých norkách",category:"🌍 Světová kultura",icon:"💍"},
+  {id:"wp06",question:"Kdo zpíval hit Baby One More Time z roku 1998?",answer:"Britney Spears",hint:"Americká popstar v šatičkách",category:"🌍 Světová kultura",icon:"💃"},
+  {id:"wp07",question:"Ve které zemi vznikly stavebnice LEGO?",answer:"Dánsko",hint:"Severní Evropa",category:"🌍 Světová kultura",icon:"🧱"},
+  {id:"wp08",question:"Jak se jmenuje hlavní záporák Star Wars?",answer:"Darth Vader",hint:"Je to Lukův otec",category:"🌍 Světová kultura",icon:"⚔️"},
+  {id:"sp01",question:"Kolik gólů dal Jaromír Jágr celkem v NHL?",answer:"766",hint:"Druhý nejvyšší střelec v historii ligy",category:"⚽ Sport",icon:"🏒"},
+  {id:"sp02",question:"Ve kterém roce získalo Česko zlatou medaili na hokejovém MS?",answer:"2010",hint:"Hrálo se v Německu",category:"⚽ Sport",icon:"🥇"},
+  {id:"sp03",question:"Jak se jmenuje fotbalový stadion Sparty Praha?",answer:"Letná",hint:"Nad Prahou v parku",category:"⚽ Sport",icon:"⚽"},
+  {id:"sp04",question:"Kdo drží rekord v počtu grandslamových titulů v tenise?",answer:"Novak Djokovic",hint:"Srbský hráč, přezdívka Nole",category:"⚽ Sport",icon:"🎾"},
+  {id:"sp05",question:"Kolik zlatých olympijských medailí vyhrál plavec Michael Phelps?",answer:"23",hint:"Nejvíc v historii OH",category:"⚽ Sport",icon:"🏊"},
+  {id:"sc01",question:"Kolik planet obíhá kolem Slunce?",answer:"8",hint:"Pluto se už nepočítá",category:"🔬 Věda",icon:"🪐"},
+  {id:"sc02",question:"Jaký plyn tvoří přibližně 78 % zemské atmosféry?",answer:"Dusík",hint:"Není to kyslík",category:"🔬 Věda",icon:"💨"},
+  {id:"sc03",question:"Kdo jako první patentoval telefon?",answer:"Alexander Graham Bell",hint:"Rok 1876",category:"🔬 Věda",icon:"📞"},
+  {id:"sc04",question:"Z jakého prvku jsou vyráběny počítačové čipy?",answer:"Křemík",hint:"Pochází z písku",category:"🔬 Věda",icon:"💻"},
+  {id:"sc05",question:"Jak se nazývá nejmenší stavební jednotka chemického prvku?",answer:"Atom",hint:"Má jádro a elektrony",category:"🔬 Věda",icon:"⚛️"},
+  {id:"ph01",question:"Kolik trpaslíků žilo se Sněhurkou?",answer:"Sedm",hint:"Každý měl jiné jméno — Stydlín, Rejpalík...",category:"🏰 Pohádky",icon:"⛏️"},
+  {id:"ph02",question:"Co se stane s Popelčiným kočárem o půlnoci?",answer:"Změní se zpátky v dýni",hint:"A střevíček zůstal na schodech",category:"🏰 Pohádky",icon:"🥿"},
+  {id:"ph03",question:"Jak se jmenuje čaroděj záporák z pohádky Arabela?",answer:"Rumburak",hint:"Arabelin nepřítel v černém",category:"🏰 Pohádky",icon:"🧙"},
+  {id:"ph04",question:"Kde bydleli pohádkový skřítci Křemílek a Vochomůrka?",answer:"V houbě",hint:"Malinký domek v lese",category:"🏰 Pohádky",icon:"🍄"},
+  {id:"ph05",question:"Jak se jmenuje česká pohádka o dívce, která dostane tři oříšky?",answer:"Tři oříšky pro Popelku",hint:"Natočena v roce 1973",category:"🏰 Pohádky",icon:"👸"},
+];
+
+// ── LOGIN ──
+async function startGame() {
+  const val = document.getElementById('team-input').value.trim();
+  if (!val) { document.getElementById('team-input').focus(); return; }
+  teamName = val.toUpperCase();
+
+  const statusEl = document.getElementById('login-status');
+  const btnEl = document.getElementById('btn-start');
+  statusEl.textContent = 'PŘIŘAZUJI TRASU...';
+  btnEl.disabled = true;
+
+  // Přiřaď trasu přes Worker
+  try {
+    const res = await fetch(WORKER_URL + '/assign-route', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team: teamName, gameId: GAME_ID, routeCount: ROUTES.length }),
+    });
+    const data = await res.json();
+    routeIndex = data.routeIndex || 0;
+  } catch(e) {
+    // Fallback — přiřaď lokálně z localStorage
+    const usedRoutes = JSON.parse(localStorage.getItem('bojovka_used_routes_' + GAME_ID) || '{}');
+    const counts = Array(ROUTES.length).fill(0);
+    Object.values(usedRoutes).forEach(r => { if (r >= 0 && r < ROUTES.length) counts[r]++; });
+    const minCount = Math.min(...counts);
+    const available = counts.map((c,i) => c===minCount?i:-1).filter(i=>i>=0);
+    routeIndex = available[Math.floor(Math.random()*available.length)];
+    usedRoutes[teamName] = routeIndex;
+    localStorage.setItem('bojovka_used_routes_' + GAME_ID, JSON.stringify(usedRoutes));
+  }
+
+  btnEl.disabled = false;
+  localStorage.setItem(TEAM_KEY, teamName);
+  localStorage.setItem(ROUTE_KEY + '_' + GAME_ID, routeIndex);
+  statusEl.textContent = '';
+
+  launchGame();
+}
+
+function changeTeam() {
+  const savedTeam = localStorage.getItem(TEAM_KEY);
+  if (!savedTeam) return;
+  teamName = savedTeam;
+  routeIndex = parseInt(localStorage.getItem(ROUTE_KEY + '_' + GAME_ID) || '0');
+  launchGame();
+}
+
+function showLogin() {
+  document.getElementById('team-input').value = '';
+  document.getElementById('login-screen').classList.add('show');
+}
+
+function launchGame() {
+  const route = ROUTES[routeIndex] || ROUTES[0];
+  document.getElementById('login-screen').classList.remove('show');
+  document.getElementById('header-team').textContent = '► ' + teamName;
+  document.getElementById('sp-team').textContent = teamName;
+  document.getElementById('sp-route').textContent = route.name;
+  document.getElementById('sp-route').style.color = route.color;
+
+  // Nastav checkpointy pro tuto trasu z ALL_CHECKPOINTS
+  const stored = localStorage.getItem(STORAGE_KEY);
+  const storedAll = stored ? JSON.parse(stored) : null;
+  // Filtruj jen checkpointy této trasy
+  questions = route.checkpoints.map(cpId => {
+    const base = ALL_CHECKPOINTS.find(c => c.id === cpId);
+    const stored = storedAll ? storedAll.find(c => c.id === cpId) : null;
+    return stored || base || null;
+  }).filter(Boolean);
+
+  progress    = JSON.parse(localStorage.getItem(PROGRESS_KEY + '_' + teamName) || '{}');
+  totalScore  = Object.values(progress).reduce((s,p) => s+(p.pts||0), 0);
+  streakCount = parseInt(localStorage.getItem('bojovka_streak_' + teamName) || '0');
+
+  QUESTION_BANK = JSON.parse(localStorage.getItem(QBANK_KEY) || '[]');
+  if (!QUESTION_BANK.length) {
+    QUESTION_BANK = BUILTIN_QUESTIONS;
+    localStorage.setItem(QBANK_KEY, JSON.stringify(QUESTION_BANK));
+  }
+
+  initMap();
+  updateScoreDisplay();
+  startGPS();
+  publishScore();
+}
+
+function init() {
+  const savedTeam  = localStorage.getItem(TEAM_KEY);
+  const savedRoute = localStorage.getItem(ROUTE_KEY + '_' + GAME_ID);
+  if (savedTeam && savedRoute !== null) {
+    document.getElementById('btn-team-name').textContent = savedTeam;
+    document.getElementById('btn-change-team').style.display = 'block';
+    document.getElementById('login-sub-text').textContent = 'Nový tým nebo pokračuj';
+  }
+}
+
+// ── MAP ──
+function initMap() {
+  if (map) { map.remove(); map = null; Object.keys(markers).forEach(k => delete markers[k]); }
+  map = L.map('map', { zoomControl: true }).setView([49.54239, 14.17776], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM', maxZoom: 19 }).addTo(map);
+  renderMarkers();
+}
+
+function renderMarkers() {
+  Object.values(markers).forEach(m => { map.removeLayer(m.marker); map.removeLayer(m.circle); });
+  markers = {};
+  questions.forEach((q, i) => placeMarker(q, i + 1));
+}
+
+function getMarkerHTML(q, num, cls) {
+  const route = ROUTES[routeIndex] || ROUTES[0];
+  const icon = q.markerIcon || '📍';
+  return `<div class="px-marker ${cls}" id="m-${q.id}" style="${cls==='nearby'?'':''}${cls==='locked'?'':'border-color:'+route.color+';outline-color:#000;'}">${icon}<span class="m-num">${String(num).padStart(2,'0')}</span></div>`;
+}
+
+function placeMarker(q, num) {
+  const answered = !!progress[q.id]?.lastAnswered;
+  const unlocked = !!progress[q.id]?.unlocked;
+  const cls = answered ? 'answered' : unlocked ? '' : 'locked';
+  const icon = L.divIcon({ className: '', html: getMarkerHTML(q, num, cls), iconSize: [40,40], iconAnchor: [20,20] });
+  const marker = L.marker([q.lat, q.lng], { icon }).addTo(map);
+  marker.on('click', () => {
+    if (!progress[q.id]?.unlocked && !progress[q.id]?.lastAnswered) toast('PŘIBLIŽ SE KE CHECKPOINTU!');
+    else openQuestion(q.id);
+  });
+  const route = ROUTES[routeIndex] || ROUTES[0];
+  const circle = L.circle([q.lat, q.lng], { radius: q.radius||30, color: route.color, fillColor: route.color, fillOpacity: .07, weight: 1.5, dashArray: '4 4', interactive: false }).addTo(map);
+  markers[q.id] = { marker, circle };
+}
+
+// ── GPS ──
+function startGPS() {
+  if (!navigator.geolocation) { setStatus('GPS NEDOSTUPNÉ','error'); return; }
+  setStatus('HLEDÁM POLOHU...');
+  navigator.geolocation.watchPosition(
+    pos => {
+      userLat = pos.coords.latitude; userLng = pos.coords.longitude;
+      const acc = Math.round(pos.coords.accuracy);
+      if (acc > GPS_THRESHOLD) setStatus(`ČEKÁM NA GPS... ±${acc}M`,'warn');
+      else setStatus(`SIGNÁL OK  ±${acc}M`);
+      updateUserDot(acc);
+      if (acc <= GPS_THRESHOLD) checkProximity();
+    },
+    err => { const m={1:'PŘÍSTUP ODEPŘEN',2:'POLOHA NEDOSTUPNÁ',3:'TIMEOUT — JDI VEN'}; setStatus(m[err.code]||'GPS CHYBA','error'); },
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+  );
+}
+
+function updateUserDot(acc) {
+  const ll = [userLat, userLng];
+  if (!userMarker) {
+    const icon = L.divIcon({ className: '', html: `<div style="width:14px;height:14px;background:#00e5ff;border:3px solid #fff;box-shadow:0 0 12px #00e5ff;animation:blink8 1s step-end infinite"></div>`, iconSize:[14,14], iconAnchor:[7,7] });
+    userMarker = L.marker(ll, { icon, zIndexOffset: 1000 }).addTo(map);
+    map.setView(ll, 16);
+  } else { userMarker.setLatLng(ll); }
+  const color = acc <= GPS_THRESHOLD ? '#00e5ff' : '#ffe600';
+  if (accuracyCircle) { accuracyCircle.setLatLng(ll).setRadius(acc).setStyle({ color, fillColor: color }); }
+  else { accuracyCircle = L.circle(ll, { radius: acc, color, fillColor: color, fillOpacity: .06, weight: 1, dashArray: '3 3', interactive: false }).addTo(map); }
+}
+
+function checkProximity() {
+  if (userLat == null) return;
+  questions.forEach(q => {
+    if (progress[q.id]?.lastAnswered) return;
+    const dist = haversine(userLat, userLng, q.lat, q.lng);
+    const r = q.radius || 30;
+    const el = document.getElementById('m-' + q.id);
+    if (dist <= r) {
+      if (!progress[q.id]?.unlocked) { if (!progress[q.id]) progress[q.id] = {}; progress[q.id].unlocked = true; saveProgress(); }
+      if (el) { el.classList.remove('locked'); el.classList.add('nearby'); }
+      if (!nearbyNotified.has(q.id)) { nearbyNotified.add(q.id); openQuestion(q.id); }
+    } else {
+      if (el) { el.classList.remove('nearby'); if (!progress[q.id]?.unlocked) el.classList.add('locked'); }
+      nearbyNotified.delete(q.id);
+    }
+  });
+}
+
+function haversine(a,b,c,d) {
+  const R=6371000,f1=a*Math.PI/180,f2=c*Math.PI/180,df=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180;
+  const x=Math.sin(df/2)**2+Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+// ── OTÁZKA ──
+function pickRandomQuestion(cpId) {
+  if (!QUESTION_BANK.length) return null;
+  const usedKey = 'used_' + cpId + '_' + teamName;
+  let used = JSON.parse(sessionStorage.getItem(usedKey)||'[]');
+  let available = QUESTION_BANK.filter(q => !used.includes(q.id));
+  if (!available.length) { used=[]; sessionStorage.setItem(usedKey,'[]'); available=QUESTION_BANK; }
+  const q = available[Math.floor(Math.random()*available.length)];
+  used.push(q.id); sessionStorage.setItem(usedKey, JSON.stringify(used));
+  return q;
+}
+
+function openQuestion(id) {
+  const cp = questions.find(x=>x.id===id);
+  if (!cp) return;
+  activeQuestion = cp;
+  const num = questions.indexOf(cp)+1;
+  document.getElementById('q-num').textContent = `CHECKPOINT #${String(num).padStart(2,'0')}`;
+  const hintEl=document.getElementById('q-hint'), hintBtn=document.getElementById('q-hint-btn');
+  const inp=document.getElementById('q-input'), btn=document.getElementById('q-btn');
+  const res=document.getElementById('q-result'), counter=document.getElementById('q-counter');
+  hintEl.textContent=''; hintEl.classList.remove('show');
+  hintBtn.style.display='none'; hintBtn.disabled=false;
+  res.className='q-result'; res.textContent='';
+  const alreadyDone = !!progress[id]?.lastAnswered;
+  let questionObj;
+  if (cp.text && cp.text.trim()) {
+    activeQBankQ=null; questionObj=cp;
+    document.getElementById('q-icon').textContent=cp.markerIcon||'📍';
+    document.getElementById('q-cat').textContent='CHECKPOINT';
+  } else {
+    const bq=pickRandomQuestion(id); activeQBankQ=bq; questionObj=bq;
+    if (bq) { document.getElementById('q-icon').textContent=bq.icon||'❓'; document.getElementById('q-cat').textContent=bq.category||'OTÁZKA'; }
+    else { document.getElementById('q-icon').textContent='⚠️'; document.getElementById('q-cat').textContent=''; document.getElementById('q-text').textContent='Žádné otázky v bance.'; inp.style.display='none'; btn.style.display='block'; btn.textContent='► OK'; counter.textContent=''; document.getElementById('overlay').classList.add('show'); return; }
+  }
+  document.getElementById('q-text').textContent=questionObj.question||questionObj.text;
+  counter.textContent='BANKA: '+QUESTION_BANK.length+' OTÁZEK';
+  if (questionObj.hint) { hintEl.textContent='💡 '+questionObj.hint; hintBtn.style.display='block'; hintBtn.textContent=(cp.points||1)>1?'💡 NÁPOVĚDA (-1 BOD)':'💡 NÁPOVĚDA (ZDARMA)'; }
+  if (alreadyDone) {
+    const p=progress[id]; inp.style.display='none'; btn.style.display='none'; hintBtn.style.display='none';
+    if (p.correct===true) { res.className='q-result correct'; res.textContent='★ SPRÁVNĚ! +'+( p.pts||0)+' BODŮ'; }
+    else if (p.correct===false) { res.className='q-result wrong'; res.textContent='✕ ŠPATNĚ — SPLNĚNO BEZ BODU'; }
+    else { res.className='q-result open'; res.textContent='✓ SPLNĚNO'; }
+  } else if ((questionObj.answer||'').trim()) {
+    inp.style.display='block'; inp.value=''; btn.style.display='block'; btn.textContent='► POTVRDIT';
+  } else {
+    inp.style.display='none'; btn.style.display='block'; btn.textContent='► SPLNĚNO ✓';
+  }
+  document.getElementById('overlay').classList.add('show');
+}
+
+function revealHint() {
+  document.getElementById('q-hint').classList.add('show');
+  const hintBtn=document.getElementById('q-hint-btn'); hintBtn.disabled=true; hintBtn.textContent='💡 NÁPOVĚDA ODKRYTA';
+  if (activeQuestion) { if (!progress[activeQuestion.id]) progress[activeQuestion.id]={}; progress[activeQuestion.id].hintUsed=true; saveProgress(); }
+}
+
+async function submitAnswer() {
+  if (!activeQuestion) return;
+  const cp=activeQuestion, bq=activeQBankQ;
+  const inp=document.getElementById('q-input'), res=document.getElementById('q-result'), btn=document.getElementById('q-btn');
+  const questionObj=bq||cp, correctAnswer=(questionObj.answer||'').trim();
+  const hintUsed=!!(progress[cp.id]?.hintUsed);
+
+  if (correctAnswer) {
+    const given=inp.value.trim(); if (!given) { inp.focus(); return; }
+    const correct=norm(given)===norm(correctAnswer);
+    if (correct) {
+      let earned=Math.max(BASE_POINTS-(hintUsed?1:0),0), bonusMsg='';
+      if (!hintUsed) { streakCount++; localStorage.setItem('bojovka_streak_'+teamName,streakCount); if (streakCount%STREAK_EVERY===0) { earned+=STREAK_BONUS; bonusMsg+=' 🔥 STREAK +'+STREAK_BONUS+'!'; } }
+      else { streakCount=0; localStorage.setItem('bojovka_streak_'+teamName,0); }
+      const gotSpeed=await checkSpeedBonus(cp.id); if (gotSpeed) { earned+=1; bonusMsg+=' ⚡ PRVNÍ! +1'; }
+      progress[cp.id]={unlocked:true,hintUsed,...progress[cp.id],lastAnswered:Date.now(),correct:true,pts:earned};
+      totalScore+=earned;
+      let msg='★ SPRÁVNĚ! +'+earned+' BODŮ'; if (hintUsed) msg+=' (NÁPOVĚDA -1)'; if (bonusMsg) msg+=bonusMsg;
+      const sp=streakCount%STREAK_EVERY; if (sp>0) msg+=' ['+sp+'/'+STREAK_EVERY+' ke streaku]';
+      res.className='q-result correct'; res.textContent=msg;
+    } else {
+      streakCount=0; localStorage.setItem('bojovka_streak_'+teamName,0);
+      progress[cp.id]={unlocked:true,hintUsed,...progress[cp.id],lastAnswered:Date.now(),correct:false,pts:0};
+      res.className='q-result wrong'; res.textContent='✕ ŠPATNĚ. ODPOVĚĎ: '+correctAnswer;
+    }
+    inp.style.display='none'; btn.style.display='none';
+  } else {
+    progress[cp.id]={unlocked:true,...progress[cp.id],lastAnswered:Date.now(),correct:null,pts:0};
+    res.className='q-result open'; res.textContent='✓ CHECKPOINT SPLNĚN'; btn.style.display='none';
+  }
+  saveProgress(); updateScoreDisplay(); refreshMarker(cp.id); publishScore();
+}
+
+async function checkSpeedBonus(cpId) {
+  const bonusKey='bojovka_speed_'+GAME_ID+'_'+cpId;
+  const existing=localStorage.getItem(bonusKey);
+  if (!existing) {
+    try {
+      const res=await fetch(WORKER_URL+'/scores?gameId='+GAME_ID);
+      if (res.ok) { const data=await res.json(); const othersDone=(data.teams||[]).filter(t=>t.team!==teamName).some(t=>t.completedCheckpoints&&t.completedCheckpoints.includes(cpId)); if (othersDone) return false; }
+    } catch(e) {}
+    localStorage.setItem(bonusKey,teamName); return true;
+  }
+  return existing===teamName;
+}
+
+function norm(s) { return s.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function closeOverlay() { document.getElementById('overlay').classList.remove('show'); activeQuestion=null; activeQBankQ=null; }
+
+function refreshMarker(id) {
+  const cp=questions.find(x=>x.id===id); if (!cp||!markers[id]) return;
+  const num=questions.indexOf(cp)+1;
+  markers[id].marker.setIcon(L.divIcon({ className:'', html:getMarkerHTML(cp,num,'answered'), iconSize:[40,40], iconAnchor:[20,20] }));
+}
+
+// ── SKÓRE ──
+function updateScoreDisplay() {
+  document.getElementById('score-val').textContent = totalScore;
+  updateStreakDisplay();
+}
+
+function updateStreakDisplay() {
+  const wrap = document.getElementById('streak-wrap');
+  const fire = document.getElementById('streak-fire');
+  const num  = document.getElementById('streak-num');
+  if (!wrap) return;
+  if (streakCount === 0) { wrap.style.display='none'; return; }
+  wrap.style.display = 'flex';
+  num.textContent = '�' + streakCount;
+  if (streakCount >= 6)      { fire.className='streak-fire inferno'; num.className='streak-num inferno'; }
+  else if (streakCount >= 3) { fire.className='streak-fire hot';     num.className='streak-num hot'; }
+  else                       { fire.className='streak-fire warm';    num.className='streak-num'; }
+}
+
+// ── LEADERBOARD ──
+async function publishScore() {
+  const completed=Object.keys(progress).filter(id=>progress[id]?.lastAnswered);
+  const route=ROUTES[routeIndex]||ROUTES[0];
+  const entry={team:teamName,score:totalScore,checkpoints:completed.length,completedCheckpoints:completed,gameId:GAME_ID,routeId:route.id};
+  localStorage.setItem('bojovka_lb_'+teamName,JSON.stringify({...entry,updated:Date.now()}));
+  try { await fetch(WORKER_URL+'/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry)}); } catch(e) {}
+}
+
+async function refreshLeaderboard() {
+  const el=document.getElementById('lb-list');
+  el.innerHTML='<div style="font-family:VT323,monospace;font-size:18px;color:var(--gray);text-align:center;padding:16px">Načítám...</div>';
+  let teams={};
+  try {
+    const res=await fetch(`${WORKER_URL}/scores?gameId=${GAME_ID}`);
+    if (res.ok) { const data=await res.json(); if (data.teams) data.teams.filter(t=>t.score>=0).forEach(t=>{teams[t.team]=t;}); }
+  } catch(e) {
+    for (let i=0;i<localStorage.length;i++) { const k=localStorage.key(i); if (k&&k.startsWith('bojovka_lb_')) { try { const e=JSON.parse(localStorage.getItem(k)); if (e&&e.team&&e.score>=0) teams[e.team]=e; } catch(e){} } }
+  }
+  const route=ROUTES[routeIndex]||ROUTES[0];
+  teams[teamName]={team:teamName,score:totalScore,checkpoints:Object.values(progress).filter(p=>p.lastAnswered).length,routeId:route.id,updated:Date.now()};
+  const sorted=Object.values(teams).sort((a,b)=>b.score-a.score||b.checkpoints-a.checkpoints);
+  if (!sorted.length) { el.innerHTML='<div style="font-family:VT323,monospace;font-size:18px;color:var(--gray);text-align:center;padding:16px">Žádné týmy zatím.</div>'; }
+  else {
+    el.innerHTML=sorted.map((t,i)=>{
+      const r=ROUTES.find(r=>r.id===t.routeId);
+      const routeLabel=r?`<span style="font-size:5px;color:${r.color};display:block;margin-top:2px">${r.name}</span>`:'';
+      return `<div class="lb-row rank-${i+1} ${t.team===teamName?'me':''}">
+        <div class="lb-pos">${i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.'}</div>
+        <div style="flex:1;min-width:0"><div class="lb-name">${esc(t.team)}${t.team===teamName?' ◄':''}</div>${routeLabel}<div class="lb-cp">${t.checkpoints} checkpointů</div></div>
+        <div class="lb-pts">${t.score} b</div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('lb-updated').textContent='Aktualizováno: '+new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
+}
+
+function openLeaderboard() { document.getElementById('lb-overlay').classList.add('show'); refreshLeaderboard(); }
+function closeLeaderboard() { document.getElementById('lb-overlay').classList.remove('show'); }
+function saveProgress() { localStorage.setItem(PROGRESS_KEY+'_'+teamName,JSON.stringify(progress)); }
+function setStatus(msg,type='') { const el=document.getElementById('status-bar'); el.textContent=msg; el.className='status-bar'+(type?' '+type:''); }
+function toast(msg) { const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2400); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+init();
+</script>
+</body>
+</html>
