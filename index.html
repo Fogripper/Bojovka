@@ -433,13 +433,12 @@ function launchGame() {
   document.getElementById('sp-route').style.color = route.color;
 
   // Nastav checkpointy pro tuto trasu z ALL_CHECKPOINTS
-  const stored = localStorage.getItem(STORAGE_KEY);
-  const storedAll = stored ? JSON.parse(stored) : null;
-  // Filtruj jen checkpointy této trasy
+  const storedRaw = localStorage.getItem(STORAGE_KEY);
+  const storedCps = storedRaw ? JSON.parse(storedRaw) : null;
   questions = route.checkpoints.map(cpId => {
-    const base = ALL_CHECKPOINTS.find(c => c.id === cpId);
-    const stored = storedAll ? storedAll.find(c => c.id === cpId) : null;
-    return stored || base || null;
+    const fromStorage = storedCps ? storedCps.find(c => c.id === cpId) : null;
+    const fromBuiltin = ALL_CHECKPOINTS.find(c => c.id === cpId);
+    return fromStorage || fromBuiltin || null;
   }).filter(Boolean);
 
   progress    = JSON.parse(localStorage.getItem(PROGRESS_KEY + '_' + teamName) || '{}');
@@ -462,9 +461,13 @@ function init() {
   const savedTeam  = localStorage.getItem(TEAM_KEY);
   const savedRoute = localStorage.getItem(ROUTE_KEY + '_' + GAME_ID);
   if (savedTeam && savedRoute !== null) {
+    // Automaticky spusť hru pro uložený tým
+    teamName   = savedTeam;
+    routeIndex = parseInt(savedRoute);
     document.getElementById('btn-team-name').textContent = savedTeam;
     document.getElementById('btn-change-team').style.display = 'block';
     document.getElementById('login-sub-text').textContent = 'Nový tým nebo pokračuj';
+    launchGame();
   }
 }
 
@@ -682,7 +685,7 @@ function updateStreakDisplay() {
   if (!wrap) return;
   if (streakCount === 0) { wrap.style.display='none'; return; }
   wrap.style.display = 'flex';
-  num.textContent = '�' + streakCount;
+  num.textContent = '×' + streakCount;
   if (streakCount >= 6)      { fire.className='streak-fire inferno'; num.className='streak-num inferno'; }
   else if (streakCount >= 3) { fire.className='streak-fire hot';     num.className='streak-num hot'; }
   else                       { fire.className='streak-fire warm';    num.className='streak-num'; }
