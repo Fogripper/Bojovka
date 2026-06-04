@@ -452,6 +452,44 @@ select { cursor: pointer; }
   </div>
 </div>
 
+<!-- EDIT OTÁZKY V BANCE -->
+<div id="bq-edit-modal" class="modal-overlay" onclick="if(event.target===this)closeBqEdit()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Upravit otázku</span>
+      <button class="btn-icon" onclick="closeBqEdit()">✕</button>
+    </div>
+    <div class="field">
+      <label>Text otázky</label>
+      <textarea id="bq-edit-text" style="min-height:80px"></textarea>
+    </div>
+    <div class="two-col">
+      <div class="field">
+        <label>Správná odpověď</label>
+        <input type="text" id="bq-edit-ans" placeholder="(prázdné = otevřená)">
+      </div>
+      <div class="field">
+        <label>Nápověda</label>
+        <input type="text" id="bq-edit-hint" placeholder="(volitelné)">
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="field">
+        <label>Kategorie</label>
+        <input type="text" id="bq-edit-cat">
+      </div>
+      <div class="field">
+        <label>Ikona (emoji)</label>
+        <input type="text" id="bq-edit-icon" style="font-size:18px">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-primary" onclick="saveBqEdit()" style="flex:1">Uložit změny</button>
+      <button class="btn btn-ghost" onclick="closeBqEdit()">Zrušit</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const STORAGE_KEY  = 'bojovka_questions';
 const PROGRESS_KEY = 'bojovka_progress';
@@ -814,6 +852,42 @@ function deleteBankQuestion(id) {
   questionBank = questionBank.filter(q => q.id !== id); saveBank(); renderBank(); updateBankStats();
 }
 
+let editingBqId = null;
+
+function openBqEdit(id) {
+  const q = questionBank.find(x => x.id === id);
+  if (!q) return;
+  editingBqId = id;
+  document.getElementById('bq-edit-text').value = q.question || '';
+  document.getElementById('bq-edit-ans').value  = q.answer   || '';
+  document.getElementById('bq-edit-hint').value = q.hint     || '';
+  document.getElementById('bq-edit-cat').value  = q.category || '';
+  document.getElementById('bq-edit-icon').value = q.icon     || '❓';
+  document.getElementById('bq-edit-modal').classList.add('open');
+}
+
+function closeBqEdit() {
+  document.getElementById('bq-edit-modal').classList.remove('open');
+  editingBqId = null;
+}
+
+function saveBqEdit() {
+  if (!editingBqId) return;
+  const idx = questionBank.findIndex(x => x.id === editingBqId);
+  if (idx === -1) return;
+  const text = document.getElementById('bq-edit-text').value.trim();
+  if (!text) { toast('Zadej text otázky!'); return; }
+  questionBank[idx] = {
+    ...questionBank[idx],
+    question: text,
+    answer:   document.getElementById('bq-edit-ans').value.trim(),
+    hint:     document.getElementById('bq-edit-hint').value.trim(),
+    category: document.getElementById('bq-edit-cat').value.trim() || 'Vlastní',
+    icon:     document.getElementById('bq-edit-icon').value.trim() || '❓',
+  };
+  saveBank(); renderBank(); updateBankStats(); closeBqEdit(); toast('Otázka uložena ✓');
+}
+
 function renderBank() {
   const el = document.getElementById('bank-list');
   document.getElementById('bank-count-badge').textContent = questionBank.length ? `(${questionBank.length})` : '';
@@ -827,6 +901,7 @@ function renderBank() {
         ${q.answer ? `<div class="bq-ans">✓ ${esc(q.answer)}</div>` : ''}
         ${q.hint ? `<div class="bq-hint">💡 ${esc(q.hint)}</div>` : ''}
       </div>
+      <button class="btn-icon" onclick="openBqEdit('${q.id}')" title="Upravit">✏️</button>
       <button class="btn-icon" onclick="deleteBankQuestion('${q.id}')" title="Smazat">🗑️</button>
     </div>`).join('');
 }
