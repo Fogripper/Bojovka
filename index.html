@@ -466,6 +466,7 @@ function launchGame() {
 
 // Polling stavu hry každých 5 sekund
 async function checkGameState() {
+  dbg("checkGameState start");
   try {
     const res = await fetch(`${WORKER_URL}/game/state?gameId=${GAME_ID}`);
     const data = await res.json();
@@ -477,20 +478,20 @@ async function checkGameState() {
     }
 
     if (data.started) {
-      // Hra běží — spusť
+      dbg("Hra spuštěna, remaining=" + data.remaining);
       gameStartTime = data.startTime;
       gameDuration  = data.duration;
       clearInterval(gamePollingInterval);
       showGameRunning();
     } else {
-      // Hra ještě nezačala — čekací obrazovka
+      dbg("Hra nezačala, čekám...");
       showWaiting();
       if (!gamePollingInterval) {
         gamePollingInterval = setInterval(checkGameState, 4000);
       }
     }
   } catch(e) {
-    // Offline fallback — rovnou spusť hru
+    dbg("checkGameState ERROR: " + e.message + " → fallback");
     showGameRunning();
   }
 }
@@ -503,6 +504,7 @@ function showWaiting() {
 }
 
 function showGameRunning() {
+  dbg("showGameRunning, map=" + (!!map) + " questions=" + questions.length);
   // Skryj čekací obrazovky
   document.getElementById('waiting-screen').classList.remove('show');
   document.getElementById('countdown-screen').classList.remove('show');
@@ -581,6 +583,7 @@ function init() {
 
 // ── MAP ──
 function initMap() {
+  dbg("initMap, questions=" + questions.length);
   if (map) { map.remove(); map = null; Object.keys(markers).forEach(k => delete markers[k]); }
   map = L.map('map', { zoomControl: true }).setView([49.54239, 14.17776], 15);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM', maxZoom: 19 }).addTo(map);
@@ -628,6 +631,7 @@ function startGPS() {
   setStatus('HLEDÁM POLOHU...');
   navigator.geolocation.watchPosition(
     pos => {
+      dbg("GPS pos acc=" + Math.round(pos.coords.accuracy) + "m");
       userLat = pos.coords.latitude; userLng = pos.coords.longitude;
       const acc = Math.round(pos.coords.accuracy);
       if (acc > GPS_THRESHOLD) setStatus(`ČEKÁM NA GPS... ±${acc}M`,'warn');
@@ -635,7 +639,7 @@ function startGPS() {
       updateUserDot(acc);
       if (acc <= GPS_THRESHOLD) checkProximity();
     },
-    err => { const m={1:'PŘÍSTUP ODEPŘEN',2:'POLOHA NEDOSTUPNÁ',3:'TIMEOUT — JDI VEN'}; setStatus(m[err.code]||'GPS CHYBA','error'); },
+    err => { dbg("GPS ERR code=" + err.code); const m={1:'PŘÍSTUP ODEPŘEN',2:'POLOHA NEDOSTUPNÁ',3:'TIMEOUT — JDI VEN'}; setStatus(m[err.code]||'GPS CHYBA','error'); },
     { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
   );
 }
@@ -863,6 +867,18 @@ async function refreshLeaderboard() {
 function openLeaderboard() { document.getElementById('lb-overlay').classList.add('show'); refreshLeaderboard(); }
 function closeLeaderboard() { document.getElementById('lb-overlay').classList.remove('show'); }
 function saveProgress() { localStorage.setItem(PROGRESS_KEY+'_'+teamName,JSON.stringify(progress)); }
+function dbg(msg) {
+  const el = document.getElementById('debug-log');
+  const panel = document.getElementById('debug-panel');
+  if (!el) return;
+  panel.style.display = 'block';
+  const line = document.createElement('div');
+  line.textContent = new Date().toLocaleTimeString('cs',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+  if (el.children.length > 30) el.removeChild(el.children[0]);
+}
+
 function setStatus(msg,type='') { const el=document.getElementById('status-bar'); el.textContent=msg; el.className='status-bar'+(type?' '+type:''); }
 function toast(msg) { const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2400); }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
