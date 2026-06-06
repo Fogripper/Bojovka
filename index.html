@@ -504,18 +504,33 @@ function showWaiting() {
 }
 
 function showGameRunning() {
-  dbg("showGameRunning, map=" + (!!map) + " questions=" + questions.length);
-  // Skryj čekací obrazovky
+  dbg("showGameRunning map=" + (!!map) + " q=" + questions.length);
   document.getElementById('waiting-screen').classList.remove('show');
   document.getElementById('countdown-screen').classList.remove('show');
 
-  if (!map) {
-    initMap();
-    startGPS();
-  }
-  updateScoreDisplay();
-  startCountdown();
-  publishScore();
+  // Krátký delay aby DOM byl připravený
+  setTimeout(() => {
+    if (!map) {
+      dbg("Inicializuji mapu...");
+      try {
+        initMap();
+        dbg("Mapa OK, markerů: " + Object.keys(markers).length);
+      } catch(e) {
+        dbg("MAP ERR: " + e.message);
+      }
+    } else {
+      dbg("Mapa existuje, invaliduji...");
+      map.invalidateSize();
+      renderMarkers();
+    }
+    if (!userLat) {
+      dbg("Spoustim GPS...");
+      startGPS();
+    }
+    updateScoreDisplay();
+    startCountdown();
+    publishScore();
+  }, 200);
 }
 
 function showGameOver() {
@@ -568,8 +583,11 @@ function startCountdown() {
 }
 
 function init() {
+  dbg("=== BOJOVKA INIT ===");
+  dbg("UA: " + navigator.userAgent.slice(0,40));
   const savedTeam  = localStorage.getItem(TEAM_KEY);
   const savedRoute = localStorage.getItem(ROUTE_KEY + '_' + GAME_ID);
+  dbg("savedTeam=" + savedTeam + " savedRoute=" + savedRoute);
   if (savedTeam && savedRoute !== null) {
     // Automaticky spusť hru pro uložený tým
     teamName   = savedTeam;
@@ -872,6 +890,7 @@ function dbg(msg) {
   const panel = document.getElementById('debug-panel');
   if (!el) return;
   panel.style.display = 'block';
+  console.log("[DBG]", msg);
   const line = document.createElement('div');
   line.textContent = new Date().toLocaleTimeString('cs',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' ' + msg;
   el.appendChild(line);
