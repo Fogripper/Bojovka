@@ -381,6 +381,15 @@ const ALL_CHECKPOINTS = [
 ];
 
 // Definice tras — pole ID checkpointů
+// Fixní TEST lobby — vždy dostupná bez synchronizace
+const TEST_LOBBY_CODE = 'TEST';
+const TEST_LOBBY_CHECKPOINTS = [
+  {id:"test01",lat:50.03338,lng:14.53942,radius:30,points:1,markerIcon:"📍",text:"",answer:"",hint:"",lobbies:["TEST"]},
+  {id:"test02",lat:50.03254,lng:14.53498,radius:30,points:1,markerIcon:"📍",text:"",answer:"",hint:"",lobbies:["TEST"]},
+  {id:"test03",lat:50.03129,lng:14.53560,radius:30,points:1,markerIcon:"📍",text:"",answer:"",hint:"",lobbies:["TEST"]},
+  {id:"test04",lat:50.03070,lng:14.53639,radius:30,points:1,markerIcon:"📍",text:"",answer:"",hint:"",lobbies:["TEST"]},
+];
+
 const ROUTES = [
   { id:'A', name:'TRASA ALFA',  color:'#00e5ff', checkpoints:["mpycpbd9js69","mpycpj9f9hk5","mpycpokewr3d","mpyj3snz3or3","mpycqufikmrd","mpyj3ug00jdg","mpyj3qpfm8br","mpycpsonxk8h","mpycpm14xbji"] },
   { id:'B', name:'TRASA BETA',  color:'#ff1a1a', checkpoints:["mpycpqidvks4","mpycpv6usxxm","mpycpws2w98x","mpycq3uqsqvw","mpycq2aknuxx","mpyj3x16laxf","mpyj3vthyq19","mpyj3ha5i7yq","mpyj3jez6hul"] },
@@ -615,13 +624,19 @@ async function launchGame() {
 
   // Načti checkpointy z Workeru (asynchronně)
   let workerCheckpoints = [];
-  try {
-    const res = await fetch(`${WORKER_URL}/checkpoints?gameId=${GAME_ID}`);
-    const data = await res.json();
-    if (data.ok && data.checkpoints && data.checkpoints.length > 0) {
-      workerCheckpoints = data.checkpoints;
-    }
-  } catch(e) { dbg('Checkpoints fetch err: ' + e.message); }
+  // TEST lobby — fixní checkpointy zadrátované v kódu
+  if (GAME_ID.toUpperCase() === TEST_LOBBY_CODE) {
+    workerCheckpoints = TEST_LOBBY_CHECKPOINTS;
+    dbg('TEST lobby — ' + workerCheckpoints.length + ' fixních checkpointů');
+  } else {
+    try {
+      const res = await fetch(`${WORKER_URL}/checkpoints?gameId=${GAME_ID}`);
+      const data = await res.json();
+      if (data.ok && data.checkpoints && data.checkpoints.length > 0) {
+        workerCheckpoints = data.checkpoints;
+      }
+    } catch(e) { dbg('Checkpoints fetch err: ' + e.message); }
+  }
 
   // Lobby checkpointy = z Workeru nebo z localStorage
   const allAvailable = workerCheckpoints.length > 0 ? workerCheckpoints :
