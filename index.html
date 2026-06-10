@@ -612,16 +612,35 @@ function launchGame() {
   // Nastav checkpointy
   const storedRaw = localStorage.getItem(STORAGE_KEY);
   const storedCps = storedRaw ? JSON.parse(storedRaw) : null;
-  questions = route.checkpoints.map(cpId => {
-    const fromStorage = storedCps ? storedCps.find(c => c.id === cpId) : null;
-    const fromBuiltin = ALL_CHECKPOINTS.find(c => c.id === cpId);
-    return fromStorage || fromBuiltin || null;
-  }).filter(cp => {
-    if (!cp) return false;
-    // Checkpoint je viditelný pokud: nemá lobbies pole, má prázdné lobbies, nebo aktuální GAME_ID je v seznamu
-    if (!cp.lobbies || cp.lobbies.length === 0) return true;
+
+  // Nejdřív zkontroluj jestli existují checkpointy pro tuto lobby
+  const lobbyCheckpoints = storedCps ? storedCps.filter(cp => {
+    if (!cp.lobbies || cp.lobbies.length === 0) return false;
     return cp.lobbies.includes(GAME_ID.toUpperCase());
-  });
+  }) : [];
+
+  if (lobbyCheckpoints.length > 0) {
+    // Pokud je checkpointů méně než 9, dej všem týmům stejnou trasu
+    if (lobbyCheckpoints.length < 9) {
+      questions = lobbyCheckpoints;
+    } else {
+      // Rozděl do tras podle pořadí
+      const perRoute = Math.ceil(lobbyCheckpoints.length / ROUTES.length);
+      const myRouteCheckpoints = lobbyCheckpoints.slice(routeIndex * perRoute, (routeIndex + 1) * perRoute);
+      questions = myRouteCheckpoints.length > 0 ? myRouteCheckpoints : lobbyCheckpoints;
+    }
+  } else {
+    // Fallback — použij hardcoded trasy s globálními checkpointy
+    questions = route.checkpoints.map(cpId => {
+      const fromStorage = storedCps ? storedCps.find(c => c.id === cpId) : null;
+      const fromBuiltin = ALL_CHECKPOINTS.find(c => c.id === cpId);
+      return fromStorage || fromBuiltin || null;
+    }).filter(cp => {
+      if (!cp) return false;
+      if (!cp.lobbies || cp.lobbies.length === 0) return true;
+      return cp.lobbies.includes(GAME_ID.toUpperCase());
+    });
+  }
 
   progress    = JSON.parse(localStorage.getItem(PROGRESS_KEY + '_' + teamName) || '{}');
   totalScore  = Object.values(progress).reduce((s,p) => s+(p.pts||0), 0);
