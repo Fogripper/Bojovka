@@ -79,8 +79,9 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
 .screen.show{display:flex;}
 .login-box{background:var(--navy2);border:4px solid var(--yellow);padding:28px 24px;max-width:360px;width:100%;box-shadow:8px 8px 0 var(--black);}
 .login-title{font-size:14px;color:var(--yellow);text-shadow:2px 2px 0 var(--black);margin-bottom:6px;text-align:center;}
-.login-sub{font-family:'VT323',monospace;font-size:18px;color:var(--gray);text-align:center;margin-bottom:20px;}
+.login-sub{font-family:'VT323',monospace;font-size:22px;color:var(--gray);text-align:center;margin-bottom:20px;}
 .login-input{width:100%;background:var(--navy);border:3px solid var(--white);color:var(--white);font-family:'Press Start 2P',monospace;font-size:10px;padding:12px;outline:none;caret-color:var(--cyan);margin-bottom:12px;text-align:center;letter-spacing:2px;}
+.login-input::placeholder{color:var(--gray);}
 .login-input:focus{border-color:var(--cyan);}
 .login-input::placeholder{color:var(--gray);font-size:8px;letter-spacing:1px;}
 .login-btn{font-family:'Press Start 2P',monospace;font-size:10px;padding:14px;background:var(--red);color:var(--white);border:3px solid var(--yellow);cursor:pointer;width:100%;text-shadow:1px 1px 0 var(--black);box-shadow:4px 4px 0 var(--black);transition:background .1s;}
@@ -174,17 +175,17 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
 <div class="screen show" id="login-screen">
   <div class="login-box">
     <div class="login-title">BOJOVKA.EXE</div>
-    <div class="login-sub" id="login-sub-text">Zadej kód lobby a název týmu</div>
-    <input class="login-input" type="text" id="lobby-input" placeholder="KÓD LOBBY..." maxlength="8"
+    <div class="login-sub" id="login-sub-text">Zadej kod lobby a nazev tymu</div>
+    <input class="login-input" type="text" id="lobby-input" placeholder="KOD LOBBY..." maxlength="8"
       style="letter-spacing:4px;text-transform:uppercase;"
       onkeydown="if(event.key==='Enter')document.getElementById('team-input').focus()">
-    <input class="login-input" type="text" id="team-input" placeholder="NÁZEV TÝMU..." maxlength="20"
+    <input class="login-input" type="text" id="team-input" placeholder="NAZEV TYMU..." maxlength="20"
       onkeydown="if(event.key==='Enter')startGame()">
     <div id="login-status" style="font-family:VT323,monospace;font-size:16px;color:var(--cyan);text-align:center;margin-bottom:8px;min-height:20px;"></div>
     <button class="login-btn" id="btn-start" onclick="startGame()">VSTOUPIT</button>
     <button class="login-btn" id="btn-change-team" onclick="changeTeam()"
       style="display:none;margin-top:8px;background:var(--navy2);border-color:var(--gray);font-size:8px;padding:10px">
-      ↺ POKRAČOVAT: <span id="btn-team-name"></span>
+      POKRACOVAT: <span id="btn-team-name"></span>
     </button>
   </div>
 </div>
@@ -531,11 +532,11 @@ async function startGame() {
   const statusEl = document.getElementById('login-status');
   const btnEl = document.getElementById('btn-start');
 
-  if (!lobbyCode) { document.getElementById('lobby-input').focus(); statusEl.textContent = 'ZADEJ KÓD LOBBY!'; return; }
-  if (!val) { document.getElementById('team-input').focus(); statusEl.textContent = 'ZADEJ NÁZEV TÝMU!'; return; }
+  if (!lobbyCode) { document.getElementById('lobby-input').focus(); statusEl.textContent = 'ZADEJ KOD LOBBY!'; return; }
+  if (!val) { document.getElementById('team-input').focus(); statusEl.textContent = 'ZADEJ NAZEV TYMU!'; return; }
 
   btnEl.disabled = true;
-  statusEl.textContent = 'OVĚŘUJI LOBBY...';
+  statusEl.textContent = 'OVERUJI LOBBY...';
 
   // Ověř lobby kód
   try {
@@ -548,12 +549,12 @@ async function startGame() {
     }
   } catch(e) {
     // Offline fallback — přijmi kód bez ověření
-    statusEl.textContent = '⚠ OFFLINE REŽIM';
+    statusEl.textContent = '⚠ OFFLINE REZIM';
   }
 
   GAME_ID = lobbyCode;
   teamName = val.toUpperCase();
-  statusEl.textContent = 'PŘIŘAZUJI TRASU...';
+  statusEl.textContent = 'PRIRADUJI TRASU...';
 
   // Přiřaď trasu přes Worker
   try {
@@ -976,7 +977,7 @@ function init() {
     document.getElementById('team-input').value  = savedTeam;
     document.getElementById('btn-team-name').textContent = savedTeam + ' · ' + savedLobby;
     document.getElementById('btn-change-team').style.display = 'block';
-    document.getElementById('login-sub-text').textContent = 'Pokračuj nebo zadej novou lobby';
+    document.getElementById('login-sub-text').textContent = 'Pokracuj nebo zadej novou lobby';
     launchGame();
   }
 }
