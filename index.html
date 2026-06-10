@@ -236,6 +236,7 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
     <div style="font-family:VT323,monospace;font-size:14px;color:var(--gray);margin-bottom:24px;" id="waiting-route"></div>
     <div style="width:40px;height:40px;border:3px solid var(--cyan);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px;"></div>
     <div style="font-family:VT323,monospace;font-size:13px;color:var(--gray);">Jakmile admin spustí hru,<br>automaticky začneš.</div>
+    <div id="waiting-pulse" style="font-family:VT323,monospace;font-size:13px;color:var(--cyan);margin-top:12px;opacity:.6;">kontroluji každé 2s<span id="waiting-dots"></span></div>
   </div>
 </div>
 
@@ -548,6 +549,7 @@ async function startGame() {
   btnEl.disabled = false;
   localStorage.setItem(TEAM_KEY, teamName);
   localStorage.setItem(ROUTE_KEY + '_' + GAME_ID, routeIndex);
+  localStorage.setItem('bojovka_login_time_' + GAME_ID, Date.now());
   statusEl.textContent = '';
 
   launchGame();
@@ -640,7 +642,7 @@ async function checkGameState() {
       dbg("Hra nezačala, čekám...");
       showWaiting();
       if (!gamePollingInterval) {
-        gamePollingInterval = setInterval(checkGameState, 4000);
+        gamePollingInterval = setInterval(checkGameState, 2000);
       }
     }
   } catch(e) {
@@ -649,15 +651,25 @@ async function checkGameState() {
   }
 }
 
+let waitingDotsInterval = null;
 function showWaiting() {
   const route = ROUTES[routeIndex] || ROUTES[0];
   const wsEl = document.getElementById('waiting-screen'); if (wsEl) wsEl.classList.add('show');
   document.getElementById('waiting-team-name').textContent = teamName + ' · ' + route.name;
   document.getElementById('waiting-route').textContent = questions.length + ' checkpointů na trase';
+
+  // Animace teček — vizuální feedback že polling běží
+  clearInterval(waitingDotsInterval);
+  let dots = 0;
+  waitingDotsInterval = setInterval(() => {
+    const el = document.getElementById('waiting-dots');
+    if (el) { dots = (dots + 1) % 4; el.textContent = '.'.repeat(dots); }
+  }, 500);
 }
 
 function showGameRunning() {
   dbg("showGameRunning map=" + (!!map) + " q=" + questions.length);
+  clearInterval(waitingDotsInterval);
   const ws = document.getElementById('waiting-screen'); if (ws) ws.classList.remove('show');
   const cs = document.getElementById('countdown-screen'); if (cs) cs.classList.remove('show');
 
@@ -835,18 +847,65 @@ function startCountdown() {
     if (rem <= 0) { showGameOver(); }
   }, 1000);
 
-  // Polling každých 15s během hry — detekuj zastavení adminem
+  // Polling každých 10s — detekuj zastavení nebo reset adminem
   clearInterval(gamePollingInterval);
+  const loginTime = parseInt(localStorage.getItem('bojovka_login_time_' + GAME_ID) || '0');
   gamePollingInterval = setInterval(async () => {
     try {
-      const res = await fetch(`${WORKER_URL}/game/state?gameId=${GAME_ID}`);
+      const teamSanitized = teamName.replace(/[^a-z0-9_]/gi, '_').slice(0, 30);
+      const res = await fetch(`${WORKER_URL}/check-reset?gameId=${GAME_ID}&team=${encodeURIComponent(teamSanitized)}&since=${loginTime}`);
       const data = await res.json();
-      if (data.stopped || data.finished || !data.started) {
+      if (data.reset) {
+        // Admin nás resetoval — vymaž localStorage a zobraz login
+        clearInterval(gamePollingInterval);
+        clearInterval(countdownInterval);
+        forceLogout();
+        return;
+      }
+      // Zkontroluj taky stav hry
+      const res2 = await fetch(`${WORKER_URL}/game/state?gameId=${GAME_ID}`);
+      const data2 = await res2.json();
+      if (data2.stopped || data2.finished || !data2.started) {
         clearInterval(gamePollingInterval);
         showGameOver();
       }
     } catch(e) {}
-  }, 15000);
+  }, 10000);
+}
+
+function forceLogout() {
+  // Vymaž uložený tým a zobraz login obrazovku
+  const keysToDelete = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && (k.startsWith('bojovka_team') || k.startsWith('bojovka_route_') ||
+        k.startsWith('bojovka_progress_') || k.startsWith('bojovka_streak_') ||
+        k.startsWith('bojovka_lb_') || k.startsWith('bojovka_speed_'))) {
+      keysToDelete.push(k);
+    }
+  }
+  keysToDelete.forEach(k => localStorage.removeItem(k));
+  sessionStorage.clear();
+
+  // Reset stavu hry
+  teamName = ''; routeIndex = 0; totalScore = 0; streakCount = 0;
+  currentCheckpointIndex = 0; progress = {}; gameStartTime = null;
+
+  // Skryj vše a zobraz login
+  ['waiting-screen','countdown-screen','win-screen'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('show');
+  });
+  closeOverlay();
+  closeLeaderboard();
+
+  // Reset login obrazovky
+  document.getElementById('btn-change-team').style.display = 'none';
+  document.getElementById('login-sub-text').textContent = 'Zadej jméno svého týmu';
+  document.getElementById('team-input').value = '';
+  document.getElementById('login-screen').classList.add('show');
+
+  toast('Admin resetoval hru — zadej nové jméno týmu');
 }
 
 function init() {

@@ -1226,13 +1226,21 @@ async function deleteTeam(teamName) {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Worker chyba');
   } catch(e) { toast('⚠ Worker: ' + e.message); return; }
-  ['bojovka_lb_', 'bojovka_progress_', 'bojovka_streak_'].forEach(prefix => localStorage.removeItem(prefix + teamName));
+  // Zapiš reset token pro tento tým na Worker
+  try {
+    await fetch(`${WORKER_URL}/reset-team`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: ADMIN_SECRET, gameId: GAME_ID, team: teamName, resetToken: Date.now() })
+    });
+  } catch(e) {}
+  ['bojovka_lb_', 'bojovka_progress_', 'bojovka_streak_', 'bojovka_team', 'bojovka_route_'].forEach(prefix => localStorage.removeItem(prefix + teamName));
   toast(`Tým "${teamName}" smazán ✓`);
   setTimeout(() => loadTeams(), 300);
 }
 
 async function resetScores() {
-  if (!confirm('Opravdu smazat všechna skóre ze serveru i z tohoto zařízení?')) return;
+  if (!confirm('Opravdu smazat všechna skóre a odhlásit všechny hráče?')) return;
   try {
     const res = await fetch(`${WORKER_URL}/scores?gameId=${GAME_ID}&secret=${ADMIN_SECRET}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1240,14 +1248,32 @@ async function resetScores() {
     if (!data.ok) throw new Error(data.error || 'Worker chyba');
     toast(`✓ Worker: smazáno ${data.deleted || 0} záznamů`);
   } catch(e) { toast('⚠ Worker: ' + e.message); }
+  // Zapiš reset token — hráči ho zjistí a zobrazí login
+  await writeResetToken();
   const toDelete = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k && (k.startsWith('bojovka_lb_') || k.startsWith('bojovka_progress_') || k.startsWith('bojovka_streak_') || k.startsWith('bojovka_speed_') || k === 'bojovka_visits')) toDelete.push(k);
+    if (k && (k.startsWith('bojovka_lb_') || k.startsWith('bojovka_progress_') ||
+        k.startsWith('bojovka_streak_') || k.startsWith('bojovka_speed_') ||
+        k.startsWith('bojovka_team') || k.startsWith('bojovka_route') ||
+        k === 'bojovka_visits')) toDelete.push(k);
   }
   toDelete.forEach(k => localStorage.removeItem(k));
-  toast(`✓ Lokálně smazáno ${toDelete.length} klíčů`);
+  toast(`✓ Smazáno ${toDelete.length} klíčů — hráči budou vyzváni k přihlášení`);
   setTimeout(() => loadTeams(), 500);
+}
+
+async function writeResetToken() {
+  const token = Date.now();
+  try {
+    await fetch(`${WORKER_URL}/game/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: ADMIN_SECRET, gameId: GAME_ID, stopped: true, resetToken: token })
+    });
+  } catch(e) {}
+  // Uložíme token i lokálně pro případ offline
+  localStorage.setItem('bojovka_reset_token_' + GAME_ID, token);
 }
 
 // ── EXPORT / IMPORT ──
