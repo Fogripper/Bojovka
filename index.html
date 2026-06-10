@@ -187,9 +187,43 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
   </div>
 </header>
 
+<!-- ČEKACÍ OBRAZOVKA -->
+<div class="screen" id="waiting-screen">
+  <div class="login-box" style="text-align:center;">
+    <div class="login-title" style="margin-bottom:8px;">BOJOVKA.EXE</div>
+    <div style="font-family:VT323,monospace;font-size:20px;color:var(--gray);margin-bottom:20px;" id="waiting-team-name"></div>
+    <div style="font-family:VT323,monospace;font-size:18px;color:var(--cyan);margin-bottom:16px;">ČEKEJ NA POKYN ADMINA...</div>
+    <div style="font-family:VT323,monospace;font-size:14px;color:var(--gray);margin-bottom:24px;" id="waiting-route"></div>
+    <div style="width:40px;height:40px;border:3px solid var(--cyan);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px;"></div>
+    <div style="font-family:VT323,monospace;font-size:13px;color:var(--gray);">Jakmile admin spustí hru,<br>automaticky začneš.</div>
+  </div>
+</div>
+
+<!-- COUNTDOWN 3-2-1 -->
+<div class="screen" id="countdown-screen" style="background:rgba(10,10,46,.97);">
+  <div style="text-align:center;">
+    <div style="font-family:Press Start 2P,monospace;font-size:12px;color:var(--yellow);margin-bottom:16px;letter-spacing:2px;">BOJOVKA ZAČÍNÁ!</div>
+    <div id="start-countdown" style="font-family:Press Start 2P,monospace;font-size:64px;color:var(--red);text-shadow:0 0 30px var(--red);line-height:1;">3</div>
+    <div style="font-family:VT323,monospace;font-size:20px;color:var(--gray);margin-top:16px;" id="your-route-label"></div>
+  </div>
+</div>
+
+<style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+
 <div id="map-wrap">
   <div id="status-bar" class="status-bar">HLEDAM POLOHU...</div>
+  <div class="countdown-bar" id="countdown-bar" style="display:none;">
+    <div><div class="countdown-label">ČAS ZBÝVÁ</div><div class="countdown-time" id="countdown-time">02:00:00</div></div>
+  </div>
   <div id="map"></div>
+  <!-- DEBUG PANEL -->
+  <div id="debug-panel" style="position:absolute;top:44px;left:0;right:0;z-index:600;background:rgba(0,0,0,.9);color:#00ff66;font-family:monospace;font-size:10px;padding:6px 10px;max-height:140px;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+      <span style="color:#ffe600;font-weight:bold">DEBUG LOG</span>
+      <button onclick="document.getElementById('debug-panel').style.display='none'" style="background:none;border:none;color:#ff4444;font-size:12px;cursor:pointer">✕</button>
+    </div>
+    <div id="debug-log">Načítám...</div>
+  </div>
   <div class="score-panel" onclick="openLeaderboard()">
     <span class="team-name" id="sp-team">—</span>
     <span style="font-size:5px;display:block;margin-bottom:3px;" id="sp-route"></span>
@@ -498,15 +532,15 @@ async function checkGameState() {
 
 function showWaiting() {
   const route = ROUTES[routeIndex] || ROUTES[0];
-  document.getElementById('waiting-screen').classList.add('show');
+  const wsEl = document.getElementById('waiting-screen'); if (wsEl) wsEl.classList.add('show');
   document.getElementById('waiting-team-name').textContent = teamName + ' · ' + route.name;
   document.getElementById('waiting-route').textContent = questions.length + ' checkpointů na trase';
 }
 
 function showGameRunning() {
   dbg("showGameRunning map=" + (!!map) + " q=" + questions.length);
-  document.getElementById('waiting-screen').classList.remove('show');
-  document.getElementById('countdown-screen').classList.remove('show');
+  const ws = document.getElementById('waiting-screen'); if (ws) ws.classList.remove('show');
+  const cs = document.getElementById('countdown-screen'); if (cs) cs.classList.remove('show');
 
   // Krátký delay aby DOM byl připravený
   setTimeout(() => {
