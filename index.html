@@ -696,19 +696,44 @@ function showGameOver() {
 }
 
 async function fetchAndShowWinner() {
+  // Nejdřív ulož aktuální skóre
+  await publishScore();
+
   let teams = [];
   try {
     const res = await fetch(`${WORKER_URL}/scores?gameId=${GAME_ID}`);
     const data = await res.json();
     if (data.ok && data.teams) teams = data.teams.filter(t => t.score >= 0);
   } catch(e) {}
+
   const myEntry = { team: teamName, score: totalScore, checkpoints: Object.values(progress).filter(p=>p.lastAnswered).length };
   const existing = teams.findIndex(t => t.team === teamName);
   if (existing >= 0) teams[existing] = myEntry; else teams.push(myEntry);
   teams.sort((a,b) => b.score - a.score || b.checkpoints - a.checkpoints);
+
   const winner = teams[0];
   const isWinner = winner && winner.team === teamName;
-  const reachedGoal = totalScore >= WIN_SCORE;
+  const reachedGoal = totalScore >= (window.WIN_SCORE_OVERRIDE || WIN_SCORE);
+
+  // Pokud tento tým dosáhl cíle, zastav hru na Workeru
+  // (ostatní telefony to zjistí přes polling a taky přejdou na win screen)
+  if (reachedGoal && isWinner) {
+    try {
+      await fetch(`${WORKER_URL}/game/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          secret: 'bojovka2026', // ADMIN_SECRET — hráč může zastavit hru výhrou
+          gameId: GAME_ID,
+          stopped: true,
+          winner: teamName,
+          winScore: totalScore
+        })
+      });
+      dbg('Hra zastavena — ' + teamName + ' dosáhl cíle s ' + totalScore + ' body');
+    } catch(e) { dbg('Chyba zastavení hry: ' + e.message); }
+  }
+
   showWinScreen(winner, isWinner, reachedGoal, teams);
 }
 

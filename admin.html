@@ -1075,8 +1075,17 @@ async function checkAdminGameState() {
     const data = await res.json();
     if (data.started && !data.finished) {
       startAdminCountdown(data.startTime, data.duration);
-    } else if (data.finished) {
-      document.getElementById('game-status-text').textContent = 'Hra skončila';
+      document.getElementById('game-status-text').textContent = 'Hra běží';
+    } else if (data.stopped || data.finished) {
+      clearInterval(adminCountdownInterval);
+      document.getElementById('game-countdown-admin').style.display = 'none';
+      if (data.winner) {
+        document.getElementById('game-status-text').innerHTML =
+          `🏆 Vyhrál: <strong>${esc(data.winner)}</strong> (${data.winScore} b)`;
+        document.getElementById('game-status-text').style.color = 'gold';
+      } else {
+        document.getElementById('game-status-text').textContent = 'Hra skončila';
+      }
     }
   } catch(e) {}
 }
