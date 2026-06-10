@@ -257,6 +257,11 @@ select { cursor: pointer; }
           </div>
         </div>
 
+        <div class="field">
+          <label>Lobby kódy (prázdné = všechny, jinak odděl čárkou)</label>
+          <input type="text" id="a-lobbies" placeholder="Prázdné = globální" style="text-transform:uppercase;letter-spacing:1px;">
+        </div>
+
         <div id="admin-map"></div>
         <div class="map-hint">💡 Klikni na mapu pro rychlé zadání souřadnic</div>
 
@@ -523,6 +528,11 @@ Skupiny dobrodruhů se vydaly do lesa..."></textarea>
       </div>
     </div>
 
+    <div class="field">
+      <label>Lobby kódy (prázdné = všechny, jinak odděl čárkou: ABCDE,XY123)</label>
+      <input type="text" id="edit-lobbies" placeholder="Prázdné = globální checkpoint" style="text-transform:uppercase;letter-spacing:1px;">
+    </div>
+
     <div class="two-col">
       <div class="field">
         <label>Šířka (lat)</label>
@@ -690,11 +700,13 @@ function addQuestion() {
   const lng    = parseFloat(document.getElementById('a-lng').value);
   const radius = parseInt(document.getElementById('a-rad').value) || 30;
   const points = parseInt(document.getElementById('a-pts').value) || 1;
+  const lobbies = document.getElementById('a-lobbies').value.trim().toUpperCase()
+    .split(',').map(s=>s.trim()).filter(Boolean);
   if (isNaN(lat) || isNaN(lng)) { toast('Zadej GPS souřadnice!'); return; }
-  const q = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, answer, hint, lat, lng, radius, points, markerIcon: selectedIcon, markerType: selectedIcon };
+  const q = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, answer, hint, lat, lng, radius, points, markerIcon: selectedIcon, markerType: selectedIcon, lobbies };
   questions.push(q); saveQ(); renderList(); addAdminMarker(q, questions.length);
   adminMap.setView([lat, lng], 16);
-  ['a-q','a-ans','a-hint','a-lat','a-lng'].forEach(id => document.getElementById(id).value = '');
+  ['a-q','a-ans','a-hint','a-lat','a-lng','a-lobbies'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('a-rad').value = 30; document.getElementById('a-pts').value = 1;
   toast('Checkpoint přidán ✓');
 }
@@ -715,7 +727,7 @@ function renderList() {
       <div class="cp-icon">${q.markerIcon || '📍'}</div>
       <div class="cp-body">
         <div class="cp-name ${q.text ? '' : 'random'}">${q.text ? esc(q.text) : '— náhodná otázka z banky —'} <span id="terrain-${q.id}" style="font-size:11px;margin-left:4px"></span></div>
-        <div class="cp-meta">${q.lat.toFixed(5)}, ${q.lng.toFixed(5)} · dosah ${q.radius} m · ${q.points} bod/ů</div>
+        <div class="cp-meta">${q.lat.toFixed(5)}, ${q.lng.toFixed(5)} · dosah ${q.radius} m · ${q.points} bod/ů${q.lobbies && q.lobbies.length ? ' · <span style="color:#8b5cf6">🔑 ' + q.lobbies.join(', ') + '</span>' : ''}</div>
         <div class="cp-answer">${q.answer ? '✓ ' + esc(q.answer) : q.text ? 'otevřená otázka' : ''}</div>
       </div>
       <span style="color:var(--muted);font-size:12px;font-weight:600;margin-right:2px;flex-shrink:0">#${i+1}</span>
@@ -832,6 +844,7 @@ function openEdit(id) {
   document.getElementById('edit-lng').value  = q.lng;
   document.getElementById('edit-rad').value  = q.radius || 30;
   document.getElementById('edit-pts').value  = q.points || 1;
+  document.getElementById('edit-lobbies').value = (q.lobbies || []).join(', ');
   document.getElementById('edit-icon-val').value = q.markerIcon || '📍';
   document.querySelectorAll('.edit-icon-btn').forEach(el => el.classList.toggle('active', el.textContent.trim() === (q.markerIcon || '📍')));
   document.getElementById('edit-modal').classList.add('open');
@@ -847,7 +860,9 @@ function saveEdit() {
   const lng = parseFloat(document.getElementById('edit-lng').value);
   if (isNaN(lat) || isNaN(lng)) { toast('Zkontroluj souřadnice'); return; }
   const icon = document.getElementById('edit-icon-val').value || '📍';
-  questions[idx] = { ...questions[idx], text: document.getElementById('edit-q').value.trim(), answer: document.getElementById('edit-ans').value.trim(), hint: document.getElementById('edit-hint').value.trim(), lat, lng, radius: parseInt(document.getElementById('edit-rad').value) || 30, points: parseInt(document.getElementById('edit-pts').value) || 1, markerIcon: icon, markerType: icon };
+  const editLobbies = document.getElementById('edit-lobbies').value.trim().toUpperCase()
+    .split(',').map(s=>s.trim()).filter(Boolean);
+  questions[idx] = { ...questions[idx], text: document.getElementById('edit-q').value.trim(), answer: document.getElementById('edit-ans').value.trim(), hint: document.getElementById('edit-hint').value.trim(), lat, lng, radius: parseInt(document.getElementById('edit-rad').value) || 30, points: parseInt(document.getElementById('edit-pts').value) || 1, markerIcon: icon, markerType: icon, lobbies: editLobbies };
   saveQ();
   if (adminMarkers[editingId]) { adminMap.removeLayer(adminMarkers[editingId]); delete adminMarkers[editingId]; }
   addAdminMarker(questions[idx], idx + 1);

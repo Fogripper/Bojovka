@@ -606,7 +606,12 @@ function launchGame() {
     const fromStorage = storedCps ? storedCps.find(c => c.id === cpId) : null;
     const fromBuiltin = ALL_CHECKPOINTS.find(c => c.id === cpId);
     return fromStorage || fromBuiltin || null;
-  }).filter(Boolean);
+  }).filter(cp => {
+    if (!cp) return false;
+    // Checkpoint je viditelný pokud: nemá lobbies pole, má prázdné lobbies, nebo aktuální GAME_ID je v seznamu
+    if (!cp.lobbies || cp.lobbies.length === 0) return true;
+    return cp.lobbies.includes(GAME_ID.toUpperCase());
+  });
 
   progress    = JSON.parse(localStorage.getItem(PROGRESS_KEY + '_' + teamName) || '{}');
   totalScore  = Object.values(progress).reduce((s,p) => s+(p.pts||0), 0);
