@@ -161,10 +161,12 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
 .lb-name{flex:1;font-size:14px;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Press Start 2P',monospace;line-height:1.4;}
 .lb-row.me .lb-name{color:var(--cyan);}
 .lb-pts{font-size:36px;font-family:'VT323',monospace;color:var(--green);white-space:nowrap;min-width:60px;text-align:right;}
-.lb-cp{font-size:10px;color:var(--gray);margin-top:4px;font-family:'VT323',monospace;}
-.lb-refresh{font-family:'Press Start 2P',monospace;font-size:11px;padding:16px;background:var(--blue);color:var(--white);border:2px solid var(--cyan);cursor:pointer;width:100%;margin-top:8px;}
+.lb-cp{font-size:16px;color:var(--gray);margin-top:4px;font-family:'VT323',monospace;}
+.lb-route{font-size:14px;font-family:'VT323',monospace;margin-top:2px;}
+.lb-refresh{font-family:'Press Start 2P',monospace;font-size:13px;padding:18px;background:var(--blue);color:var(--white);border:2px solid var(--cyan);cursor:pointer;width:100%;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:12px;}
 .lb-refresh:hover{background:var(--navy);}
-.lb-updated{font-size:11px;color:var(--gray);text-align:center;margin-top:10px;font-family:'VT323',monospace;}
+.lb-refresh-icon{font-size:22px;line-height:1;}
+.lb-updated{font-size:14px;color:var(--gray);text-align:center;margin-top:10px;font-family:'VT323',monospace;}
 </style>
 </head>
 <body>
@@ -323,7 +325,7 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
     </div>
     <div class="lb-body">
       <div id="lb-list" class="lb-empty">Načítám...</div>
-      <button class="lb-refresh" onclick="refreshLeaderboard()">↺ AKTUALIZOVAT</button>
+      <button class="lb-refresh" onclick="refreshLeaderboard()"><span class="lb-refresh-icon">↺</span> AKTUALIZOVAT</button>
       <div class="lb-updated" id="lb-updated"></div>
     </div>
   </div>
@@ -1261,8 +1263,7 @@ async function refreshLeaderboard() {
   else {
     el.innerHTML=sorted.map((t,i)=>{
       const r=ROUTES.find(r=>r.id===t.routeId);
-      const routeLabel=r?`<span style="font-size:5px;color:${r.color};display:block;margin-top:2px">${r.name}</span>`:'';
-      return `<div class="lb-row rank-${i+1} ${t.team===teamName?'me':''}">
+      const routeLabel=r?`<span class="lb-route" style="color:${r.color}">${r.name}</span>`:'';return `<div class="lb-row rank-${i+1} ${t.team===teamName?'me':''}">
         <div class="lb-pos">${i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.'}</div>
         <div style="flex:1;min-width:0"><div class="lb-name">${esc(t.team)}${t.team===teamName?' ◄':''}</div>${routeLabel}<div class="lb-cp">${t.checkpoints} checkpointů</div></div>
         <div class="lb-pts">${t.score} b</div>
