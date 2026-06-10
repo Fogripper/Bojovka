@@ -1269,16 +1269,9 @@ function closeLeaderboard() { document.getElementById('lb-overlay').classList.re
 function saveProgress() { localStorage.setItem(PROGRESS_KEY+'_'+teamName,JSON.stringify(progress)); }
 function dbg(msg) {
   console.log("[DBG]", msg);
-  // Pošli log na Worker pokud je tým přihlášen
-  if (teamName) {
-    try {
-      fetch(WORKER_URL + '/log', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({team: teamName, gameId: GAME_ID, msg, time: Date.now()})
-      }).catch(()=>{});
-    } catch(e) {}
-  }
+  // KV logy vypnuty pro šetření KV write limitu
+  // Zapni jen když debuguješ: odkomentuj níže
+  // if (teamName) { fetch(WORKER_URL + '/log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({team: teamName, gameId: GAME_ID, msg, time: Date.now()}) }).catch(()=>{}); }
 }
 
 function setStatus(msg,type='') { const el=document.getElementById('status-bar'); el.textContent=msg; el.className='status-bar'+(type?' '+type:''); }
