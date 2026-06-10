@@ -199,6 +199,7 @@ select { cursor: pointer; }
   <button class="tab-btn active" onclick="switchTab('checkpoints', this)">📍 Checkpointy</button>
   <button class="tab-btn" onclick="switchTab('qbank', this)">🎲 Databáze otázek</button>
   <button class="tab-btn" onclick="switchTab('tracking', this)">👥 Sledování týmů</button>
+  <button class="tab-btn" onclick="switchTab('story', this)">📖 Příběh</button>
   <button class="tab-btn" onclick="switchTab('logs', this)">📋 Logy</button>
   <button class="tab-btn" onclick="switchTab('export', this)">💾 Export / Import</button>
 </div>
@@ -378,6 +379,42 @@ select { cursor: pointer; }
       <h2 style="font-size:15px;font-weight:600;margin-bottom:12px;">Mapa checkpointů</h2>
       <div id="track-map"></div>
       <p style="font-size:12px;color:var(--muted);">Checkpointy jsou zobrazeny na mapě. Pozice týmů nejsou k dispozici v offline režimu.</p>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: PŘÍBĚH -->
+<div id="tab-story" class="tab-pane">
+  <div style="padding:20px;max-width:680px;">
+    <div class="card">
+      <div class="card-title"><div class="dot" style="background:#8b5cf6"></div> Příběhová předehra</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+        Hráči uvidí příběh po přihlášení — psací stroj efekt, stránka po stránce.<br>
+        <strong>Každý odstavec (prázdný řádek = oddělení) = nová stránka.</strong>
+      </p>
+      <div class="field">
+        <label>Text příběhu</label>
+        <textarea id="story-input" style="min-height:300px;font-size:13px;line-height:1.6;" placeholder="Napiš příběh...
+
+Každý odstavec oddělený prázdným řádkem bude samostatná stránka.
+
+Příklad:
+Bylo jednou jedno léto u přehrady Orlík...
+
+Skupiny dobrodruhů se vydaly do lesa..."></textarea>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <button class="btn btn-primary" onclick="saveStory()" style="flex:1;min-width:150px;">💾 Uložit příběh</button>
+        <button class="btn btn-secondary btn-sm" onclick="loadStory()">↺ Načíst uložený</button>
+        <button class="btn btn-danger btn-sm" onclick="clearStory()">✕ Smazat</button>
+      </div>
+      <div id="story-status" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>
+    </div>
+
+    <!-- Náhled -->
+    <div class="card" style="margin-top:0;">
+      <div class="card-title"><div class="dot" style="background:#06b6d4"></div> Náhled stránek</div>
+      <div id="story-preview" style="font-size:12px;color:var(--muted);">Načti nebo ulož příběh pro náhled.</div>
     </div>
   </div>
 </div>
@@ -960,6 +997,7 @@ function switchTab(name, btn) {
   if (name === 'checkpoints' && adminMap) setTimeout(() => adminMap.invalidateSize(), 50);
   if (name === 'tracking') { initTrackMap(); loadTeams(); checkAdminGameState(); }
   if (name === 'logs') { loadLogs(); }
+  if (name === 'story') { loadStory(); }
 }
 
 function initTrackMap() {
@@ -995,12 +1033,19 @@ async function startGame() {
 async function stopGame() {
   if (!confirm('Zastavit hru předčasně?')) return;
   try {
-    await fetch(`${WORKER_URL}/scores?gameId=${GAME_ID}&secret=${ADMIN_SECRET}`, { method: 'DELETE' });
-    clearInterval(adminCountdownInterval);
-    document.getElementById('game-status-text').textContent = 'Hra zastavena';
-    document.getElementById('game-countdown-admin').style.display = 'none';
-    toast('Hra zastavena');
-  } catch(e) { toast('⚠️ Chyba: ' + e.message); }
+    // Zapiš stav "hra skončila" na Worker
+    const res = await fetch(`${WORKER_URL}/game/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: ADMIN_SECRET, gameId: GAME_ID, duration: 0, stopped: true })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Worker chyba');
+  } catch(e) { toast('⚠️ Worker: ' + e.message); return; }
+  clearInterval(adminCountdownInterval);
+  document.getElementById('game-status-text').textContent = 'Hra zastavena';
+  document.getElementById('game-countdown-admin').style.display = 'none';
+  toast('Hra zastavena — hráčům se zobrazí leaderboard');
 }
 
 function startAdminCountdown(startTime, duration) {
@@ -1030,6 +1075,65 @@ async function checkAdminGameState() {
       document.getElementById('game-status-text').textContent = 'Hra skončila';
     }
   } catch(e) {}
+}
+
+// ── PŘÍBĚH ──
+async function saveStory() {
+  const text = document.getElementById('story-input').value.trim();
+  const pages = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  const statusEl = document.getElementById('story-status');
+  if (!pages.length) { toast('Napiš příběh!'); return; }
+  try {
+    const res = await fetch(`${WORKER_URL}/story`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: ADMIN_SECRET, gameId: GAME_ID, pages })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    statusEl.textContent = `✅ Uloženo ${data.saved} stránek`;
+    renderStoryPreview(pages);
+    toast('Příběh uložen ✓');
+  } catch(e) { statusEl.textContent = '⚠️ ' + e.message; toast('Chyba: ' + e.message); }
+}
+
+async function loadStory() {
+  const statusEl = document.getElementById('story-status');
+  try {
+    const res = await fetch(`${WORKER_URL}/story?gameId=${GAME_ID}`);
+    const data = await res.json();
+    if (data.ok && data.pages && data.pages.length) {
+      document.getElementById('story-input').value = data.pages.join('\n\n');
+      statusEl.textContent = `Načteno ${data.pages.length} stránek`;
+      renderStoryPreview(data.pages);
+    } else {
+      statusEl.textContent = 'Žádný příběh uložen.';
+    }
+  } catch(e) { statusEl.textContent = '⚠️ ' + e.message; }
+}
+
+async function clearStory() {
+  if (!confirm('Smazat příběh?')) return;
+  document.getElementById('story-input').value = '';
+  document.getElementById('story-status').textContent = '';
+  document.getElementById('story-preview').innerHTML = '<div style="font-size:12px;color:var(--muted);">Příběh smazán.</div>';
+  try {
+    await fetch(`${WORKER_URL}/story`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: ADMIN_SECRET, gameId: GAME_ID, pages: [] })
+    });
+    toast('Příběh smazán');
+  } catch(e) {}
+}
+
+function renderStoryPreview(pages) {
+  const el = document.getElementById('story-preview');
+  el.innerHTML = pages.map((p, i) => `
+    <div style="margin-bottom:12px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
+      <div style="font-size:10px;font-weight:600;color:var(--accent);margin-bottom:6px;">Strana ${i+1}/${pages.length}</div>
+      <div style="font-size:12px;color:var(--text);white-space:pre-wrap;line-height:1.5;">${esc(p)}</div>
+    </div>`).join('');
 }
 
 async function loadLogs() {

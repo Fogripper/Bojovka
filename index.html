@@ -187,6 +187,31 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
   </div>
 </header>
 
+<!-- PŘÍBĚHOVÁ PŘEDEHRA -->
+<div class="screen" id="story-screen">
+  <div style="position:relative;width:100%;max-width:480px;padding:20px;">
+    <!-- CRT monitor frame -->
+    <div style="background:var(--navy2);border:4px solid var(--yellow);box-shadow:8px 8px 0 var(--black),0 0 40px rgba(255,230,0,.15);padding:24px 20px;min-height:320px;display:flex;flex-direction:column;">
+      <!-- stránka info -->
+      <div style="font-size:7px;color:var(--gray);letter-spacing:2px;margin-bottom:16px;display:flex;justify-content:space-between;">
+        <span id="story-page-label">STRANA 1/1</span>
+        <span style="color:var(--cyan);" id="story-team-label"></span>
+      </div>
+      <!-- text s psacím strojem -->
+      <div style="flex:1;font-family:VT323,monospace;font-size:20px;color:var(--white);line-height:1.6;min-height:200px;white-space:pre-wrap;" id="story-text"></div>
+      <!-- kurzor -->
+      <span id="story-cursor" style="font-family:VT323,monospace;font-size:20px;color:var(--cyan);animation:blink8 .6s step-end infinite;">█</span>
+      <!-- tlačítka -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;">
+        <button id="story-skip" onclick="skipStory()" style="font-family:'Press Start 2P',monospace;font-size:7px;background:transparent;color:var(--gray);border:1px solid var(--gray);padding:6px 10px;cursor:pointer;">PŘESKOČIT</button>
+        <button id="story-next" onclick="nextStoryPage()" style="font-family:'Press Start 2P',monospace;font-size:9px;background:var(--red);color:var(--white);border:3px solid var(--yellow);padding:10px 16px;cursor:pointer;box-shadow:3px 3px 0 var(--black);display:none;">DALŠÍ ►</button>
+      </div>
+    </div>
+    <!-- scanlines -->
+    <div style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(0,0,0,0.1) 3px,rgba(0,0,0,0.1) 4px);border-radius:2px;"></div>
+  </div>
+</div>
+
 <!-- ČEKACÍ OBRAZOVKA -->
 <div class="screen" id="waiting-screen">
   <div class="login-box" style="text-align:center;">
@@ -339,6 +364,64 @@ let teamName = '';
 let routeIndex = 0;
 let totalScore = 0;
 let streakCount = 0;
+let storyPages = [];
+let storyPageIndex = 0;
+let storyTypingInterval = null;
+
+// ── PŘÍBĚH ──
+function showStory(pages, onFinish) {
+  if (!pages || !pages.length) { onFinish(); return; }
+  storyPages = pages;
+  storyPageIndex = 0;
+  document.getElementById('story-team-label').textContent = teamName;
+  document.getElementById('story-screen').classList.add('show');
+  typeStoryPage(onFinish);
+}
+
+function typeStoryPage(onFinish) {
+  const page = storyPages[storyPageIndex];
+  const textEl = document.getElementById('story-text');
+  const nextBtn = document.getElementById('story-next');
+  const cursorEl = document.getElementById('story-cursor');
+  const pageLabel = document.getElementById('story-page-label');
+
+  pageLabel.textContent = `STRANA ${storyPageIndex + 1}/${storyPages.length}`;
+  nextBtn.style.display = 'none';
+  nextBtn.textContent = storyPageIndex < storyPages.length - 1 ? 'DALŠÍ ►' : 'ZAČÍT ►';
+  textEl.textContent = '';
+  cursorEl.style.display = 'inline';
+
+  clearInterval(storyTypingInterval);
+  let i = 0;
+  storyTypingInterval = setInterval(() => {
+    if (i < page.length) {
+      textEl.textContent += page[i];
+      i++;
+    } else {
+      clearInterval(storyTypingInterval);
+      cursorEl.style.display = 'none';
+      nextBtn.style.display = 'block';
+      nextBtn.onclick = () => {
+        storyPageIndex++;
+        if (storyPageIndex >= storyPages.length) {
+          document.getElementById('story-screen').classList.remove('show');
+          onFinish();
+        } else {
+          typeStoryPage(onFinish);
+        }
+      };
+    }
+  }, 30); // 30ms per znak = ~33 znaků/s
+}
+
+function skipStory() {
+  clearInterval(storyTypingInterval);
+  // Dopiš aktuální stránku okamžitě
+  const page = storyPages[storyPageIndex];
+  document.getElementById('story-text').textContent = page;
+  document.getElementById('story-cursor').style.display = 'none';
+  document.getElementById('story-next').style.display = 'block';
+}
 let gameStartTime = null;
 let gameDuration = 7200;
 let gamePollingInterval = null;
@@ -492,8 +575,23 @@ function launchGame() {
     localStorage.setItem(QBANK_KEY, JSON.stringify(QUESTION_BANK));
   }
 
-  // Zobraz čekací obrazovku nebo rovnou hru
-  checkGameState();
+  // Načti příběh a zobraz, pak checkGameState
+  loadAndShowStory(() => checkGameState());
+}
+
+async function loadAndShowStory(onFinish) {
+  // Pokud hráč již viděl příběh v této session, přeskoč
+  if (sessionStorage.getItem('story_seen_' + GAME_ID)) { onFinish(); return; }
+  try {
+    const res = await fetch(`${WORKER_URL}/story?gameId=${GAME_ID}`);
+    const data = await res.json();
+    if (data.ok && data.pages && data.pages.length) {
+      sessionStorage.setItem('story_seen_' + GAME_ID, '1');
+      showStory(data.pages, onFinish);
+      return;
+    }
+  } catch(e) {}
+  onFinish();
 }
 
 // Polling stavu hry každých 5 sekund
@@ -595,10 +693,9 @@ function startCountdownAnimation(callback) {
 }
 
 function startCountdown() {
-  // Odpočet v mapě
   const bar = document.getElementById('countdown-bar');
   const timeEl = document.getElementById('countdown-time');
-  bar.style.display = 'flex';
+  if (bar) bar.style.display = 'flex';
 
   clearInterval(countdownInterval);
   countdownInterval = setInterval(() => {
@@ -608,10 +705,25 @@ function startCountdown() {
     const h = Math.floor(rem / 3600);
     const m = Math.floor((rem % 3600) / 60);
     const s = Math.floor(rem % 60);
-    timeEl.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    timeEl.className = 'countdown-time' + (rem < 300 ? ' urgent' : '');
+    if (timeEl) {
+      timeEl.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      timeEl.className = 'countdown-time' + (rem < 300 ? ' urgent' : '');
+    }
     if (rem <= 0) { showGameOver(); }
   }, 1000);
+
+  // Polling každých 15s během hry — detekuj zastavení adminem
+  clearInterval(gamePollingInterval);
+  gamePollingInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`${WORKER_URL}/game/state?gameId=${GAME_ID}`);
+      const data = await res.json();
+      if (data.stopped || data.finished || !data.started) {
+        clearInterval(gamePollingInterval);
+        showGameOver();
+      }
+    } catch(e) {}
+  }, 15000);
 }
 
 function init() {
