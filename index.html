@@ -181,7 +181,7 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
     <input class="login-input" type="text" id="team-input" placeholder="NÁZEV TÝMU..." maxlength="20"
       onkeydown="if(event.key==='Enter')startGame()">
     <div id="login-status" style="font-family:VT323,monospace;font-size:16px;color:var(--cyan);text-align:center;margin-bottom:8px;min-height:20px;"></div>
-    <button class="login-btn" id="btn-start" onclick="startGame()">► VSTOUPIT</button>
+    <button class="login-btn" id="btn-start" onclick="startGame()">VSTOUPIT</button>
     <button class="login-btn" id="btn-change-team" onclick="changeTeam()"
       style="display:none;margin-top:8px;background:var(--navy2);border-color:var(--gray);font-size:8px;padding:10px">
       ↺ POKRAČOVAT: <span id="btn-team-name"></span>
@@ -308,7 +308,7 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
       <button class="btn-hint" id="q-hint-btn" onclick="revealHint()" style="display:none">💡 NÁPOVĚDA (-1 BOD)</button>
       <div class="q-hint-box" id="q-hint"></div>
       <input class="q-input" type="text" id="q-input" placeholder="TVOJE ODPOVĚĎ...">
-      <button class="btn-ok" id="q-btn" onclick="submitAnswer()">► POTVRDIT</button>
+      <button class="btn-ok" id="q-btn" onclick="submitAnswer()">POTVRDIT</button>
       <div class="q-result" id="q-result"></div>
       <div class="q-counter" id="q-counter"></div>
     </div>
@@ -324,7 +324,7 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
     </div>
     <div class="lb-body">
       <div id="lb-list" class="lb-empty">Načítám...</div>
-      <button class="lb-refresh" onclick="refreshLeaderboard()">↺ AKTUALIZOVAT</button>
+      <button class="lb-refresh" onclick="refreshLeaderboard()">AKTUALIZOVAT</button>
       <div class="lb-updated" id="lb-updated"></div>
     </div>
   </div>
@@ -1113,7 +1113,7 @@ function openQuestion(id) {
   } else {
     const bq=pickRandomQuestion(id); activeQBankQ=bq; questionObj=bq;
     if (bq) { document.getElementById('q-icon').textContent=bq.icon||'❓'; document.getElementById('q-cat').textContent=bq.category||'OTÁZKA'; }
-    else { document.getElementById('q-icon').textContent='⚠️'; document.getElementById('q-cat').textContent=''; document.getElementById('q-text').textContent='Žádné otázky v bance.'; inp.style.display='none'; btn.style.display='block'; btn.textContent='► OK'; counter.textContent=''; document.getElementById('overlay').classList.add('show'); return; }
+    else { document.getElementById('q-icon').textContent='⚠️'; document.getElementById('q-cat').textContent=''; document.getElementById('q-text').textContent='Žádné otázky v bance.'; inp.style.display='none'; btn.style.display='block'; btn.textContent='OK'; counter.textContent=''; document.getElementById('overlay').classList.add('show'); return; }
   }
   document.getElementById('q-text').textContent=questionObj.question||questionObj.text;
   counter.textContent='BANKA: '+QUESTION_BANK.length+' OTÁZEK';
@@ -1124,9 +1124,9 @@ function openQuestion(id) {
     else if (p.correct===false) { res.className='q-result wrong'; res.textContent='✕ ŠPATNĚ — SPLNĚNO BEZ BODU'; }
     else { res.className='q-result open'; res.textContent='✓ SPLNĚNO'; }
   } else if ((questionObj.answer||'').trim()) {
-    inp.style.display='block'; inp.value=''; btn.style.display='block'; btn.textContent='► POTVRDIT';
+    inp.style.display='block'; inp.value=''; btn.style.display='block'; btn.textContent='POTVRDIT';
   } else {
-    inp.style.display='none'; btn.style.display='block'; btn.textContent='► SPLNĚNO ✓';
+    inp.style.display='none'; btn.style.display='block'; btn.textContent='SPLNĚNO';
   }
   document.getElementById('overlay').classList.add('show');
 }
