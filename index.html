@@ -165,14 +165,17 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
 <div class="screen show" id="login-screen">
   <div class="login-box">
     <div class="login-title">BOJOVKA.EXE</div>
-    <div class="login-sub" id="login-sub-text">Zadej jméno svého týmu</div>
-    <input class="login-input" type="text" id="team-input" placeholder="NAZEV TYMU..." maxlength="20"
+    <div class="login-sub" id="login-sub-text">Zadej kód lobby a název týmu</div>
+    <input class="login-input" type="text" id="lobby-input" placeholder="KÓD LOBBY..." maxlength="8"
+      style="letter-spacing:4px;text-transform:uppercase;"
+      onkeydown="if(event.key==='Enter')document.getElementById('team-input').focus()">
+    <input class="login-input" type="text" id="team-input" placeholder="NÁZEV TÝMU..." maxlength="20"
       onkeydown="if(event.key==='Enter')startGame()">
     <div id="login-status" style="font-family:VT323,monospace;font-size:16px;color:var(--cyan);text-align:center;margin-bottom:8px;min-height:20px;"></div>
-    <button class="login-btn" id="btn-start" onclick="startGame()">► START GAME</button>
+    <button class="login-btn" id="btn-start" onclick="startGame()">► VSTOUPIT</button>
     <button class="login-btn" id="btn-change-team" onclick="changeTeam()"
       style="display:none;margin-top:8px;background:var(--navy2);border-color:var(--gray);font-size:8px;padding:10px">
-      ↺ POKRAČOVAT JAKO <span id="btn-team-name"></span>
+      ↺ POKRAČOVAT: <span id="btn-team-name"></span>
     </button>
   </div>
 </div>
@@ -327,8 +330,9 @@ const PROGRESS_KEY = 'bojovka_progress';
 const QBANK_KEY    = 'bojovka_qbank';
 const TEAM_KEY     = 'bojovka_team';
 const ROUTE_KEY    = 'bojovka_route';
+const LOBBY_KEY    = 'bojovka_lobby';
 const WORKER_URL   = 'https://bojovka-worker.valapavel99.workers.dev';
-const GAME_ID      = 'orlik2025';
+let   GAME_ID      = ''; // dynamicky nastaveno podle lobby kódu
 const GPS_THRESHOLD = 50;
 const BASE_POINTS   = 3;
 const STREAK_EVERY  = 3;
@@ -446,7 +450,8 @@ let gameStartTime = null;
 let gameDuration = 7200;
 let gamePollingInterval = null;
 let countdownInterval = null;
-let currentCheckpointIndex = 0; // index aktuálního (viditelného) checkpointu
+let currentCheckpointIndex = 0;
+let gameOver = false; // flag — hra skončila, zastav veškerý polling
 
 const BUILTIN_QUESTIONS = [
   {id:"cz01",question:"Jak se jmenoval maskot České pojišťovny — animovaný zelený tvor?",answer:"Rákosníček",hint:"Skřítek z pohádky, zelený, bydlí u vody",category:"🇨🇿 Česká popkultura",icon:"📺"},
@@ -516,14 +521,34 @@ const BUILTIN_QUESTIONS = [
 
 // ── LOGIN ──
 async function startGame() {
+  const lobbyCode = document.getElementById('lobby-input').value.trim().toUpperCase();
   const val = document.getElementById('team-input').value.trim();
-  if (!val) { document.getElementById('team-input').focus(); return; }
-  teamName = val.toUpperCase();
-
   const statusEl = document.getElementById('login-status');
   const btnEl = document.getElementById('btn-start');
-  statusEl.textContent = 'PŘIŘAZUJI TRASU...';
+
+  if (!lobbyCode) { document.getElementById('lobby-input').focus(); statusEl.textContent = 'ZADEJ KÓD LOBBY!'; return; }
+  if (!val) { document.getElementById('team-input').focus(); statusEl.textContent = 'ZADEJ NÁZEV TÝMU!'; return; }
+
   btnEl.disabled = true;
+  statusEl.textContent = 'OVĚŘUJI LOBBY...';
+
+  // Ověř lobby kód
+  try {
+    const res = await fetch(`${WORKER_URL}/lobby/${lobbyCode}`);
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.textContent = '✕ LOBBY NENALEZENA';
+      btnEl.disabled = false;
+      return;
+    }
+  } catch(e) {
+    // Offline fallback — přijmi kód bez ověření
+    statusEl.textContent = '⚠ OFFLINE REŽIM';
+  }
+
+  GAME_ID = lobbyCode;
+  teamName = val.toUpperCase();
+  statusEl.textContent = 'PŘIŘAZUJI TRASU...';
 
   // Přiřaď trasu přes Worker
   try {
@@ -535,7 +560,6 @@ async function startGame() {
     const data = await res.json();
     routeIndex = data.routeIndex || 0;
   } catch(e) {
-    // Fallback — přiřaď lokálně z localStorage
     const usedRoutes = JSON.parse(localStorage.getItem('bojovka_used_routes_' + GAME_ID) || '{}');
     const counts = Array(ROUTES.length).fill(0);
     Object.values(usedRoutes).forEach(r => { if (r >= 0 && r < ROUTES.length) counts[r]++; });
@@ -547,18 +571,21 @@ async function startGame() {
   }
 
   btnEl.disabled = false;
+  statusEl.textContent = '';
   localStorage.setItem(TEAM_KEY, teamName);
+  localStorage.setItem(LOBBY_KEY, lobbyCode);
   localStorage.setItem(ROUTE_KEY + '_' + GAME_ID, routeIndex);
   localStorage.setItem('bojovka_login_time_' + GAME_ID, Date.now());
-  statusEl.textContent = '';
 
   launchGame();
 }
 
 function changeTeam() {
-  const savedTeam = localStorage.getItem(TEAM_KEY);
-  if (!savedTeam) return;
+  const savedTeam  = localStorage.getItem(TEAM_KEY);
+  const savedLobby = localStorage.getItem(LOBBY_KEY);
+  if (!savedTeam || !savedLobby) return;
   teamName = savedTeam;
+  GAME_ID  = savedLobby;
   routeIndex = parseInt(localStorage.getItem(ROUTE_KEY + '_' + GAME_ID) || '0');
   launchGame();
 }
@@ -596,6 +623,7 @@ function launchGame() {
     localStorage.setItem(QBANK_KEY, JSON.stringify(QUESTION_BANK));
   }
 
+  gameOver = false; // reset pro novou hru
   // Hned zaregistruj tým na Worker aby ho admin viděl
   publishScore();
 
@@ -625,8 +653,7 @@ async function checkGameState() {
     const res = await fetch(`${WORKER_URL}/game/state?gameId=${GAME_ID}`);
     const data = await res.json();
 
-    if (data.finished) {
-      // Hra skončila
+    if (data.finished || data.stopped) {
       showGameOver();
       return;
     }
@@ -637,8 +664,18 @@ async function checkGameState() {
       gameDuration  = data.duration;
       if (data.winScore) window.WIN_SCORE_OVERRIDE = data.winScore;
       clearInterval(gamePollingInterval);
+      gamePollingInterval = null;
       showGameRunning();
     } else {
+      // Hra nezačala — zkontroluj jestli nebyl tým resetován
+      const loginTime = parseInt(localStorage.getItem('bojovka_login_time_' + GAME_ID) || '0');
+      if (loginTime > 0 && data.resetToken && data.resetToken > loginTime) {
+        dbg("Reset token zjištěn na čekací obrazovce → forceLogout");
+        clearInterval(gamePollingInterval);
+        gamePollingInterval = null;
+        forceLogout();
+        return;
+      }
       dbg("Hra nezačala, čekám...");
       showWaiting();
       if (!gamePollingInterval) {
@@ -699,8 +736,11 @@ function showGameRunning() {
 }
 
 function showGameOver() {
+  if (gameOver) return; // zabraň dvojitému volání
+  gameOver = true;
   clearInterval(countdownInterval);
   clearInterval(gamePollingInterval);
+  gamePollingInterval = null;
   const bar = document.getElementById('countdown-bar');
   if (bar) bar.style.display = 'none';
   closeOverlay();
@@ -851,29 +891,34 @@ function startCountdown() {
   clearInterval(gamePollingInterval);
   const loginTime = parseInt(localStorage.getItem('bojovka_login_time_' + GAME_ID) || '0');
   gamePollingInterval = setInterval(async () => {
+    if (gameOver) { clearInterval(gamePollingInterval); return; }
     try {
       const teamSanitized = teamName.replace(/[^a-z0-9_]/gi, '_').slice(0, 30);
       const res = await fetch(`${WORKER_URL}/check-reset?gameId=${GAME_ID}&team=${encodeURIComponent(teamSanitized)}&since=${loginTime}`);
       const data = await res.json();
-      if (data.reset) {
-        // Admin nás resetoval — vymaž localStorage a zobraz login
+      if (data.reset && !gameOver) {
         clearInterval(gamePollingInterval);
         clearInterval(countdownInterval);
         forceLogout();
         return;
       }
-      // Zkontroluj taky stav hry
-      const res2 = await fetch(`${WORKER_URL}/game/state?gameId=${GAME_ID}`);
-      const data2 = await res2.json();
-      if (data2.stopped || data2.finished || !data2.started) {
-        clearInterval(gamePollingInterval);
-        showGameOver();
+      // Zkontroluj stav hry — ale jen pokud hra ještě běží
+      if (!gameOver) {
+        const res2 = await fetch(`${WORKER_URL}/game/state?gameId=${GAME_ID}`);
+        const data2 = await res2.json();
+        if (data2.stopped || data2.finished || !data2.started) {
+          // Zastav polling PŘED showGameOver aby se nezavolal vícekrát
+          clearInterval(gamePollingInterval);
+          gamePollingInterval = null;
+          showGameOver();
+        }
       }
     } catch(e) {}
   }, 10000);
 }
 
 function forceLogout() {
+  gameOver = false; // reset pro příště
   // Vymaž uložený tým a zobraz login obrazovku
   const keysToDelete = [];
   for (let i = 0; i < localStorage.length; i++) {
@@ -910,17 +955,18 @@ function forceLogout() {
 
 function init() {
   dbg("=== BOJOVKA INIT ===");
-  dbg("UA: " + navigator.userAgent.slice(0,40));
   const savedTeam  = localStorage.getItem(TEAM_KEY);
-  const savedRoute = localStorage.getItem(ROUTE_KEY + '_' + GAME_ID);
-  dbg("savedTeam=" + savedTeam + " savedRoute=" + savedRoute);
-  if (savedTeam && savedRoute !== null) {
-    // Automaticky spusť hru pro uložený tým
+  const savedLobby = localStorage.getItem(LOBBY_KEY);
+  dbg("savedTeam=" + savedTeam + " savedLobby=" + savedLobby);
+  if (savedTeam && savedLobby) {
+    GAME_ID    = savedLobby;
     teamName   = savedTeam;
-    routeIndex = parseInt(savedRoute);
-    document.getElementById('btn-team-name').textContent = savedTeam;
+    routeIndex = parseInt(localStorage.getItem(ROUTE_KEY + '_' + savedLobby) || '0');
+    document.getElementById('lobby-input').value = savedLobby;
+    document.getElementById('team-input').value  = savedTeam;
+    document.getElementById('btn-team-name').textContent = savedTeam + ' · ' + savedLobby;
     document.getElementById('btn-change-team').style.display = 'block';
-    document.getElementById('login-sub-text').textContent = 'Nový tým nebo pokračuj';
+    document.getElementById('login-sub-text').textContent = 'Pokračuj nebo zadej novou lobby';
     launchGame();
   }
 }

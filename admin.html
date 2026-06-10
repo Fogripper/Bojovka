@@ -345,6 +345,20 @@ select { cursor: pointer; }
   <div class="page-grid">
     <div class="sidebar">
 
+      <!-- LOBBY PANEL -->
+      <div class="card" style="border:2px solid #8b5cf6;margin-bottom:16px;">
+        <div class="card-title" style="color:#8b5cf6"><div class="dot" style="background:#8b5cf6"></div> Lobby</div>
+        <div id="lobby-current" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:12px;text-align:center;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Aktivní lobby</div>
+          <div id="lobby-code-display" style="font-size:32px;font-weight:700;letter-spacing:6px;color:#8b5cf6;font-variant-numeric:tabular-nums;">—</div>
+          <div id="lobby-code-hint" style="font-size:11px;color:var(--muted);margin-top:4px;">Řekni hráčům tento kód</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button class="btn btn-primary" onclick="createLobby()" style="flex:1;background:#8b5cf6;border-color:#7c3aed;">+ Vytvořit novou lobby</button>
+        </div>
+        <div id="lobby-list-mini" style="font-size:11px;color:var(--muted);">Načítám předchozí lobby...</div>
+      </div>
+
       <!-- GAME START PANEL -->
       <div class="card" style="border:2px solid var(--accent);margin-bottom:16px;">
         <div class="card-title" style="color:var(--accent)"><div class="dot"></div> Ovládání hry</div>
@@ -570,7 +584,7 @@ const STORAGE_KEY  = 'bojovka_questions';
 const PROGRESS_KEY = 'bojovka_progress';
 const QBANK_KEY    = 'bojovka_qbank';
 const WORKER_URL   = 'https://bojovka-worker.valapavel99.workers.dev';
-const GAME_ID      = 'orlik2025';
+let   GAME_ID      = localStorage.getItem('bojovka_admin_lobby') || '';
 const ADMIN_SECRET = 'bojovka2026';
 
 const MARKER_ICONS = ['📍','🚀','🏆','💧','🌲','🪨','🔥','💀','⭐','📦','🚩','❓','🦊','🍄','🌊','🏕️'];
@@ -999,7 +1013,7 @@ function switchTab(name, btn) {
   document.getElementById(`tab-${name}`).classList.add('active');
   btn.classList.add('active');
   if (name === 'checkpoints' && adminMap) setTimeout(() => adminMap.invalidateSize(), 50);
-  if (name === 'tracking') { initTrackMap(); loadTeams(); checkAdminGameState(); }
+  if (name === 'tracking') { initTrackMap(); loadTeams(); checkAdminGameState(); initLobbyPanel(); }
   if (name === 'logs') { loadLogs(); }
   if (name === 'story') { loadStory(); }
 }
@@ -1015,6 +1029,61 @@ function initTrackMap() {
 }
 
 let adminCountdownInterval = null;
+
+// ── LOBBY ──
+async function createLobby() {
+  try {
+    const res = await fetch(`${WORKER_URL}/lobby/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: ADMIN_SECRET, name: 'Bojovka ' + new Date().toLocaleDateString('cs-CZ') })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    GAME_ID = data.code;
+    localStorage.setItem('bojovka_admin_lobby', GAME_ID);
+    setActiveLobby(GAME_ID);
+    toast(`✅ Lobby vytvořena: ${GAME_ID}`);
+    loadLobbyList();
+  } catch(e) { toast('⚠️ Chyba: ' + e.message); }
+}
+
+function setActiveLobby(code) {
+  GAME_ID = code;
+  localStorage.setItem('bojovka_admin_lobby', code);
+  document.getElementById('lobby-code-display').textContent = code;
+  document.getElementById('lobby-code-hint').textContent = 'Řekni hráčům kód: ' + code;
+  // Reset game status display
+  document.getElementById('game-status-text').textContent = 'Hra není spuštěna';
+  document.getElementById('game-status-text').style.color = '';
+  const cd = document.getElementById('game-countdown-admin');
+  if (cd) cd.style.display = 'none';
+}
+
+async function loadLobbyList() {
+  const el = document.getElementById('lobby-list-mini');
+  try {
+    const res = await fetch(`${WORKER_URL}/lobby/list?secret=${ADMIN_SECRET}`);
+    const data = await res.json();
+    if (!data.ok || !data.lobbies.length) { el.textContent = 'Žádné předchozí lobby.'; return; }
+    el.innerHTML = '<div style="margin-bottom:6px;font-size:11px;font-weight:600;">Předchozí lobby:</div>' +
+      data.lobbies.slice(0, 5).map(l => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);">
+          <span style="font-weight:600;letter-spacing:2px;cursor:pointer;color:${l.code === GAME_ID ? '#8b5cf6' : 'var(--text)'}" onclick="setActiveLobby('${l.code}')">${l.code}</span>
+          <span style="font-size:10px;color:var(--muted);">${new Date(l.created).toLocaleDateString('cs-CZ')}</span>
+        </div>`).join('');
+  } catch(e) { el.textContent = 'Nepodařilo se načíst.'; }
+}
+
+function initLobbyPanel() {
+  if (GAME_ID) {
+    setActiveLobby(GAME_ID);
+  } else {
+    document.getElementById('lobby-code-display').textContent = '—';
+    document.getElementById('lobby-code-hint').textContent = 'Vytvoř novou lobby';
+  }
+  loadLobbyList();
+}
 
 async function startGame() {
   const duration = parseInt(document.getElementById('game-duration').value) || 7200;
