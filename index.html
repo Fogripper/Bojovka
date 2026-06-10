@@ -601,7 +601,7 @@ function showLogin() {
   document.getElementById('login-screen').classList.add('show');
 }
 
-function launchGame() {
+async function launchGame() {
   const route = ROUTES[routeIndex] || ROUTES[0];
   document.getElementById('login-screen').classList.remove('show');
   document.getElementById('header-team').textContent = '► ' + teamName;
@@ -609,25 +609,33 @@ function launchGame() {
   document.getElementById('sp-route').textContent = route.name;
   document.getElementById('sp-route').style.color = route.color;
 
-  // Nastav checkpointy
+  // Nastav checkpointy — nejdřív zkus načíst z Workeru pro tuto lobby
   const storedRaw = localStorage.getItem(STORAGE_KEY);
   const storedCps = storedRaw ? JSON.parse(storedRaw) : null;
 
-  // Nejdřív zkontroluj jestli existují checkpointy pro tuto lobby
-  const lobbyCheckpoints = storedCps ? storedCps.filter(cp => {
-    if (!cp.lobbies || cp.lobbies.length === 0) return false;
-    return cp.lobbies.includes(GAME_ID.toUpperCase());
-  }) : [];
+  // Načti checkpointy z Workeru (asynchronně)
+  let workerCheckpoints = [];
+  try {
+    const res = await fetch(`${WORKER_URL}/checkpoints?gameId=${GAME_ID}`);
+    const data = await res.json();
+    if (data.ok && data.checkpoints && data.checkpoints.length > 0) {
+      workerCheckpoints = data.checkpoints;
+    }
+  } catch(e) { dbg('Checkpoints fetch err: ' + e.message); }
 
-  if (lobbyCheckpoints.length > 0) {
+  // Lobby checkpointy = z Workeru nebo z localStorage
+  const allAvailable = workerCheckpoints.length > 0 ? workerCheckpoints :
+    (storedCps ? storedCps.filter(cp => cp.lobbies && cp.lobbies.includes(GAME_ID.toUpperCase())) : []);
+
+  if (allAvailable.length > 0) {
     // Pokud je checkpointů méně než 9, dej všem týmům stejnou trasu
-    if (lobbyCheckpoints.length < 9) {
-      questions = lobbyCheckpoints;
+    if (allAvailable.length < 9) {
+      questions = allAvailable;
     } else {
       // Rozděl do tras podle pořadí
-      const perRoute = Math.ceil(lobbyCheckpoints.length / ROUTES.length);
-      const myRouteCheckpoints = lobbyCheckpoints.slice(routeIndex * perRoute, (routeIndex + 1) * perRoute);
-      questions = myRouteCheckpoints.length > 0 ? myRouteCheckpoints : lobbyCheckpoints;
+      const perRoute = Math.ceil(allAvailable.length / ROUTES.length);
+      const myRouteCheckpoints = allAvailable.slice(routeIndex * perRoute, (routeIndex + 1) * perRoute);
+      questions = myRouteCheckpoints.length > 0 ? myRouteCheckpoints : allAvailable;
     }
   } else {
     // Fallback — použij hardcoded trasy s globálními checkpointy

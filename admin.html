@@ -705,6 +705,8 @@ function addQuestion() {
   if (isNaN(lat) || isNaN(lng)) { toast('Zadej GPS souřadnice!'); return; }
   const q = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, answer, hint, lat, lng, radius, points, markerIcon: selectedIcon, markerType: selectedIcon, lobbies };
   questions.push(q); saveQ(); renderList(); addAdminMarker(q, questions.length);
+  // Synchronizuj checkpointy pro aktivní lobby
+  if (GAME_ID) syncCheckpointsToWorker(GAME_ID);
   adminMap.setView([lat, lng], 16);
   ['a-q','a-ans','a-hint','a-lat','a-lng','a-lobbies'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('a-rad').value = 30; document.getElementById('a-pts').value = 1;
@@ -867,6 +869,7 @@ function saveEdit() {
   if (adminMarkers[editingId]) { adminMap.removeLayer(adminMarkers[editingId]); delete adminMarkers[editingId]; }
   addAdminMarker(questions[idx], idx + 1);
   renderList(); closeEdit(); toast('Checkpoint uložen ✓');
+  if (GAME_ID) syncCheckpointsToWorker(GAME_ID);
 }
 
 // ── QUESTION BANK ──
@@ -1068,11 +1071,30 @@ function setActiveLobby(code) {
   localStorage.setItem('bojovka_admin_lobby', code);
   document.getElementById('lobby-code-display').textContent = code;
   document.getElementById('lobby-code-hint').textContent = 'Řekni hráčům kód: ' + code;
-  // Reset game status display
   document.getElementById('game-status-text').textContent = 'Hra není spuštěna';
   document.getElementById('game-status-text').style.color = '';
   const cd = document.getElementById('game-countdown-admin');
   if (cd) cd.style.display = 'none';
+  // Nahraj checkpointy pro tuto lobby na Worker
+  syncCheckpointsToWorker(code);
+}
+
+async function syncCheckpointsToWorker(code) {
+  const gid = code || GAME_ID;
+  // Filtruj checkpointy pro tuto lobby
+  const lobbyCheckpoints = questions.filter(q => {
+    if (!q.lobbies || q.lobbies.length === 0) return false;
+    return q.lobbies.includes(gid.toUpperCase());
+  });
+  if (!lobbyCheckpoints.length) return; // nic k nahrání
+  try {
+    await fetch(`${WORKER_URL}/checkpoints`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: ADMIN_SECRET, gameId: gid, checkpoints: lobbyCheckpoints })
+    });
+    console.log(`Nahráno ${lobbyCheckpoints.length} checkpointů pro lobby ${gid}`);
+  } catch(e) { console.error('Sync checkpoints:', e); }
 }
 
 async function loadLobbyList() {
