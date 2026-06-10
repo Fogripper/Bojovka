@@ -212,6 +212,21 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
   </div>
 </div>
 
+<!-- VÝHERNÍ OBRAZOVKA -->
+<div class="screen" id="win-screen" style="background:rgba(10,10,46,.98);z-index:4500;">
+  <div style="text-align:center;padding:20px;max-width:420px;">
+    <!-- Pixel art trofej -->
+    <div id="win-trophy" style="font-size:72px;line-height:1;margin-bottom:8px;filter:drop-shadow(0 0 20px gold);">🏆</div>
+    <div id="win-title" style="font-family:'Press Start 2P',monospace;font-size:14px;color:var(--yellow);text-shadow:0 0 20px var(--yellow);margin-bottom:12px;line-height:1.5;"></div>
+    <div id="win-team" style="font-family:VT323,monospace;font-size:32px;color:var(--white);margin-bottom:8px;"></div>
+    <div id="win-score" style="font-family:'Press Start 2P',monospace;font-size:20px;color:var(--green);text-shadow:0 0 12px var(--green);margin-bottom:24px;"></div>
+    <div id="win-particles" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;"></div>
+    <button onclick="closeWinScreen()" style="font-family:'Press Start 2P',monospace;font-size:9px;padding:12px 20px;background:var(--yellow);color:var(--black);border:none;cursor:pointer;box-shadow:4px 4px 0 var(--black);">
+      ZOBRAZIT POŘADÍ ►
+    </button>
+  </div>
+</div>
+
 <!-- ČEKACÍ OBRAZOVKA -->
 <div class="screen" id="waiting-screen">
   <div class="login-box" style="text-align:center;">
@@ -234,6 +249,9 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
 </div>
 
 <style>@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes winpulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+@keyframes particlefall { 0%{transform:translateY(-20px) rotate(0deg);opacity:1} 100%{transform:translateY(110vh) rotate(720deg);opacity:0} }
+.win-you { animation: winpulse .8s ease-in-out infinite; }
 .countdown-bar{position:absolute;top:10px;left:10px;z-index:500;background:rgba(10,10,46,.95);border:3px solid var(--yellow);padding:5px 10px;display:flex;flex-direction:column;align-items:center;min-width:80px;}
 .countdown-time{font-family:'Press Start 2P',monospace;font-size:13px;color:var(--yellow);text-shadow:0 0 8px var(--yellow);letter-spacing:1px;line-height:1.2;}
 .countdown-time.urgent{color:var(--red);text-shadow:0 0 12px var(--red);animation:blink8 .5s step-end infinite;}
@@ -314,6 +332,7 @@ const GPS_THRESHOLD = 50;
 const BASE_POINTS   = 3;
 const STREAK_EVERY  = 3;
 const STREAK_BONUS  = 2;
+const WIN_SCORE     = 18; // více než polovina možných bodů (9×3=27 → 18)
 
 // ── TRASY ──
 // Všechny checkpointy (stávající + nové)
@@ -614,6 +633,7 @@ async function checkGameState() {
       dbg("Hra spuštěna, remaining=" + data.remaining);
       gameStartTime = data.startTime;
       gameDuration  = data.duration;
+      if (data.winScore) window.WIN_SCORE_OVERRIDE = data.winScore;
       clearInterval(gamePollingInterval);
       showGameRunning();
     } else {
@@ -668,11 +688,86 @@ function showGameRunning() {
 
 function showGameOver() {
   clearInterval(countdownInterval);
-  document.getElementById('countdown-bar').style.display = 'none';
+  clearInterval(gamePollingInterval);
+  const bar = document.getElementById('countdown-bar');
+  if (bar) bar.style.display = 'none';
   closeOverlay();
-  // Otevři leaderboard
+  fetchAndShowWinner();
+}
+
+async function fetchAndShowWinner() {
+  let teams = [];
+  try {
+    const res = await fetch(`${WORKER_URL}/scores?gameId=${GAME_ID}`);
+    const data = await res.json();
+    if (data.ok && data.teams) teams = data.teams.filter(t => t.score >= 0);
+  } catch(e) {}
+  const myEntry = { team: teamName, score: totalScore, checkpoints: Object.values(progress).filter(p=>p.lastAnswered).length };
+  const existing = teams.findIndex(t => t.team === teamName);
+  if (existing >= 0) teams[existing] = myEntry; else teams.push(myEntry);
+  teams.sort((a,b) => b.score - a.score || b.checkpoints - a.checkpoints);
+  const winner = teams[0];
+  const isWinner = winner && winner.team === teamName;
+  const reachedGoal = totalScore >= WIN_SCORE;
+  showWinScreen(winner, isWinner, reachedGoal, teams);
+}
+
+function showWinScreen(winner, isWinner, reachedGoal, allTeams) {
+  const screen = document.getElementById('win-screen');
+  const trophy = document.getElementById('win-trophy');
+  const title  = document.getElementById('win-title');
+  const teamEl = document.getElementById('win-team');
+  const scoreEl= document.getElementById('win-score');
+
+  if (isWinner && reachedGoal) {
+    trophy.textContent = '🏆';
+    trophy.style.filter = 'drop-shadow(0 0 30px gold)';
+    title.innerHTML = 'VYHRÁLS!<br><span style="font-size:9px;color:var(--cyan)">CÍL DOSAŽEN</span>';
+    title.style.color = 'var(--yellow)';
+    teamEl.textContent = teamName;
+    teamEl.classList.add('win-you');
+    scoreEl.textContent = totalScore + ' BODŮ';
+    scoreEl.style.color = 'var(--green)';
+    spawnParticles(['🎉','⭐','🔥','💥','🏅']);
+  } else if (isWinner) {
+    trophy.textContent = '🥇';
+    title.innerHTML = 'NEJLEPŠÍ TÝM!';
+    title.style.color = 'var(--yellow)';
+    teamEl.textContent = teamName;
+    teamEl.classList.add('win-you');
+    scoreEl.textContent = totalScore + ' BODŮ';
+    scoreEl.style.color = 'var(--green)';
+    spawnParticles(['🎉','⭐','🏅']);
+  } else {
+    const myRank = allTeams.findIndex(t => t.team === teamName) + 1;
+    trophy.textContent = myRank === 2 ? '🥈' : myRank === 3 ? '🥉' : '💀';
+    trophy.style.filter = 'none';
+    title.textContent = `${myRank}. MÍSTO`;
+    title.style.color = 'var(--gray)';
+    teamEl.innerHTML = '🏆 VYHRÁL:<br>' + esc(winner?.team || '?');
+    teamEl.style.color = 'var(--yellow)';
+    scoreEl.textContent = 'TVOJE SKÓRE: ' + totalScore;
+    scoreEl.style.color = 'var(--gray)';
+  }
+  screen.classList.add('show');
+  setTimeout(() => closeWinScreen(), 8000);
+}
+
+function closeWinScreen() {
+  document.getElementById('win-screen').classList.remove('show');
   openLeaderboard();
-  toast('⏰ ČAS VYPRŠEL! Hra skončila.');
+}
+
+function spawnParticles(emojis) {
+  const container = document.getElementById('win-particles');
+  if (!container) return;
+  container.innerHTML = '';
+  for (let i = 0; i < 30; i++) {
+    const el = document.createElement('div');
+    el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    el.style.cssText = `position:absolute;font-size:${16 + Math.random()*20}px;left:${Math.random()*100}%;top:-30px;animation:particlefall ${2 + Math.random()*3}s linear ${Math.random()*2}s forwards;`;
+    container.appendChild(el);
+  }
 }
 
 function startCountdownAnimation(callback) {
@@ -933,6 +1028,15 @@ async function submitAnswer() {
     res.className='q-result open'; res.textContent='✓ CHECKPOINT SPLNĚN'; btn.style.display='none';
   }
   saveProgress(); updateScoreDisplay(); refreshMarker(cp.id);
+
+  // Zkontroluj jestli tým dosáhl cílového skóre
+  if (totalScore >= (window.WIN_SCORE_OVERRIDE || WIN_SCORE)) {
+    setTimeout(() => {
+      closeOverlay();
+      showGameOver();
+    }, 1500); // počkej aby hráč viděl výsledek odpovědi
+    return;
+  }
 
   // Posuň na další checkpoint
   const cpIdx = questions.indexOf(cp);

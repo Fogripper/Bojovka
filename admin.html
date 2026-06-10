@@ -362,6 +362,10 @@ select { cursor: pointer; }
             <option value="10800">3 hodiny</option>
           </select>
         </div>
+        <div class="field">
+          <label>Cílové skóre (více než polovina = výhra)</label>
+          <input type="number" id="win-score-input" value="18" min="5" max="999">
+        </div>
         <button class="btn btn-primary" id="btn-start-game" onclick="startGame()" style="background:#16a34a;border-color:#15803d;margin-bottom:8px;">▶ SPUSTIT HRU</button>
         <button class="btn btn-danger" onclick="stopGame()" style="width:100%;justify-content:center;">⏹ ZASTAVIT HRU</button>
       </div>
@@ -1020,7 +1024,7 @@ async function startGame() {
     const res = await fetch(`${WORKER_URL}/game/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret: ADMIN_SECRET, gameId: GAME_ID, duration })
+      body: JSON.stringify({ secret: ADMIN_SECRET, gameId: GAME_ID, duration, winScore: parseInt(document.getElementById('win-score-input').value) || 18 })
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
