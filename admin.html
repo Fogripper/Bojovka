@@ -199,6 +199,7 @@ select { cursor: pointer; }
   <button class="tab-btn active" onclick="switchTab('checkpoints', this)">📍 Checkpointy</button>
   <button class="tab-btn" onclick="switchTab('qbank', this)">🎲 Databáze otázek</button>
   <button class="tab-btn" onclick="switchTab('tracking', this)">👥 Sledování týmů</button>
+  <button class="tab-btn" onclick="switchTab('logs', this)">📋 Logy</button>
   <button class="tab-btn" onclick="switchTab('export', this)">💾 Export / Import</button>
 </div>
 
@@ -378,6 +379,17 @@ select { cursor: pointer; }
       <div id="track-map"></div>
       <p style="font-size:12px;color:var(--muted);">Checkpointy jsou zobrazeny na mapě. Pozice týmů nejsou k dispozici v offline režimu.</p>
     </div>
+  </div>
+</div>
+
+<!-- TAB: LOGY -->
+<div id="tab-logs" class="tab-pane">
+  <div style="padding:20px;max-width:900px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <h2 style="font-size:15px;font-weight:600;">Debug logy týmů</h2>
+      <button class="btn btn-secondary btn-sm" onclick="loadLogs()">↺ Obnovit</button>
+    </div>
+    <div id="logs-container"><div class="track-empty" style="padding:40px;text-align:center;color:var(--muted)">Klikni Obnovit pro načtení logů.</div></div>
   </div>
 </div>
 
@@ -947,6 +959,7 @@ function switchTab(name, btn) {
   btn.classList.add('active');
   if (name === 'checkpoints' && adminMap) setTimeout(() => adminMap.invalidateSize(), 50);
   if (name === 'tracking') { initTrackMap(); loadTeams(); checkAdminGameState(); }
+  if (name === 'logs') { loadLogs(); }
 }
 
 function initTrackMap() {
@@ -1017,6 +1030,43 @@ async function checkAdminGameState() {
       document.getElementById('game-status-text').textContent = 'Hra skončila';
     }
   } catch(e) {}
+}
+
+async function loadLogs() {
+  const el = document.getElementById('logs-container');
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">Načítám...</div>';
+  try {
+    const res = await fetch(`${WORKER_URL}/logs?gameId=${GAME_ID}&secret=${ADMIN_SECRET}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    const logs = data.logs || {};
+    const teams = Object.keys(logs);
+    if (!teams.length) {
+      el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px;">Žádné logy. Hráči musí mít spuštěnou hru.</div>';
+      return;
+    }
+    el.innerHTML = teams.map(team => {
+      const entries = (logs[team] || []).slice(-50).reverse();
+      const rows = entries.map(e => {
+        const t = new Date(e.time).toLocaleTimeString('cs-CZ', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+        const isErr = e.msg.toLowerCase().includes('err') || e.msg.toLowerCase().includes('chyba');
+        const color = isErr ? 'var(--red-light)' : 'transparent';
+        return `<div style="padding:3px 8px;border-bottom:1px solid var(--border);background:${color};display:flex;gap:10px;">
+          <span style="font-size:11px;color:var(--muted);flex-shrink:0;font-variant-numeric:tabular-nums;">${t}</span>
+          <span style="font-size:12px;font-family:monospace;color:${isErr?'var(--red)':'var(--text)'};">${esc(e.msg)}</span>
+        </div>`;
+      }).join('');
+      return `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+        <div style="background:var(--accent);color:#fff;padding:8px 12px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between;">
+          <span>👤 ${esc(team)}</span>
+          <span style="font-size:11px;opacity:.8;">${entries.length} záznamů</span>
+        </div>
+        <div style="max-height:240px;overflow-y:auto;background:var(--surface);">${rows || '<div style="padding:12px;color:var(--muted);font-size:12px;">Žádné záznamy</div>'}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px;">⚠️ Chyba: ${e.message}</div>`;
+  }
 }
 
 async function loadTeams() {

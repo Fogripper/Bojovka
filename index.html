@@ -208,22 +208,20 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
   </div>
 </div>
 
-<style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+<style>@keyframes spin { to { transform: rotate(360deg); } }
+.countdown-bar{position:absolute;top:10px;left:10px;z-index:500;background:rgba(10,10,46,.95);border:3px solid var(--yellow);padding:5px 10px;display:flex;flex-direction:column;align-items:center;min-width:80px;}
+.countdown-time{font-family:'Press Start 2P',monospace;font-size:13px;color:var(--yellow);text-shadow:0 0 8px var(--yellow);letter-spacing:1px;line-height:1.2;}
+.countdown-time.urgent{color:var(--red);text-shadow:0 0 12px var(--red);animation:blink8 .5s step-end infinite;}
+.countdown-label{font-size:5px;color:var(--gray);letter-spacing:1px;margin-bottom:2px;text-transform:uppercase;}</style>
 
 <div id="map-wrap">
   <div id="status-bar" class="status-bar">HLEDAM POLOHU...</div>
   <div class="countdown-bar" id="countdown-bar" style="display:none;">
-    <div><div class="countdown-label">ČAS ZBÝVÁ</div><div class="countdown-time" id="countdown-time">02:00:00</div></div>
+    <div class="countdown-label">⏱ ČAS</div>
+    <div class="countdown-time" id="countdown-time">02:00:00</div>
   </div>
   <div id="map"></div>
-  <!-- DEBUG PANEL -->
-  <div id="debug-panel" style="position:absolute;top:44px;left:0;right:0;z-index:600;background:rgba(0,0,0,.9);color:#00ff66;font-family:monospace;font-size:10px;padding:6px 10px;max-height:140px;overflow-y:auto;">
-    <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-      <span style="color:#ffe600;font-weight:bold">DEBUG LOG</span>
-      <button onclick="document.getElementById('debug-panel').style.display='none'" style="background:none;border:none;color:#ff4444;font-size:12px;cursor:pointer">✕</button>
-    </div>
-    <div id="debug-log">Načítám...</div>
-  </div>
+
   <div class="score-panel" onclick="openLeaderboard()">
     <span class="team-name" id="sp-team">—</span>
     <span style="font-size:5px;display:block;margin-bottom:3px;" id="sp-route"></span>
@@ -920,16 +918,17 @@ function openLeaderboard() { document.getElementById('lb-overlay').classList.add
 function closeLeaderboard() { document.getElementById('lb-overlay').classList.remove('show'); }
 function saveProgress() { localStorage.setItem(PROGRESS_KEY+'_'+teamName,JSON.stringify(progress)); }
 function dbg(msg) {
-  const el = document.getElementById('debug-log');
-  const panel = document.getElementById('debug-panel');
-  if (!el) return;
-  panel.style.display = 'block';
   console.log("[DBG]", msg);
-  const line = document.createElement('div');
-  line.textContent = new Date().toLocaleTimeString('cs',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' ' + msg;
-  el.appendChild(line);
-  el.scrollTop = el.scrollHeight;
-  if (el.children.length > 30) el.removeChild(el.children[0]);
+  // Pošli log na Worker pokud je tým přihlášen
+  if (teamName) {
+    try {
+      fetch(WORKER_URL + '/log', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({team: teamName, gameId: GAME_ID, msg, time: Date.now()})
+      }).catch(()=>{});
+    } catch(e) {}
+  }
 }
 
 function setStatus(msg,type='') { const el=document.getElementById('status-bar'); el.textContent=msg; el.className='status-bar'+(type?' '+type:''); }
