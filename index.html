@@ -205,8 +205,7 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
       <!-- kurzor -->
       <span id="story-cursor" style="font-family:VT323,monospace;font-size:20px;color:var(--cyan);animation:blink8 .6s step-end infinite;">█</span>
       <!-- tlačítka -->
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;">
-        <button id="story-skip" onclick="skipStory()" style="font-family:'Press Start 2P',monospace;font-size:7px;background:transparent;color:var(--gray);border:1px solid var(--gray);padding:6px 10px;cursor:pointer;">PŘESKOČIT</button>
+      <div style="display:flex;justify-content:flex-end;align-items:center;margin-top:20px;">
         <button id="story-next" onclick="nextStoryPage()" style="font-family:'Press Start 2P',monospace;font-size:9px;background:var(--red);color:var(--white);border:3px solid var(--yellow);padding:10px 16px;cursor:pointer;box-shadow:3px 3px 0 var(--black);display:none;">DALŠÍ ►</button>
       </div>
     </div>
@@ -425,27 +424,24 @@ function typeStoryPage(onFinish) {
       clearInterval(storyTypingInterval);
       cursorEl.style.display = 'none';
       nextBtn.style.display = 'block';
-      nextBtn.onclick = () => {
-        storyPageIndex++;
-        if (storyPageIndex >= storyPages.length) {
-          document.getElementById('story-screen').classList.remove('show');
-          onFinish();
-        } else {
-          typeStoryPage(onFinish);
-        }
-      };
+      // Ulož callback pro globální nextStoryPage
+      window._storyFinishCallback = onFinish;
     }
-  }, 30); // 30ms per znak = ~33 znaků/s
+  }, 30);
 }
 
-function skipStory() {
-  clearInterval(storyTypingInterval);
-  // Dopiš aktuální stránku okamžitě
-  const page = storyPages[storyPageIndex];
-  document.getElementById('story-text').textContent = page;
-  document.getElementById('story-cursor').style.display = 'none';
-  document.getElementById('story-next').style.display = 'block';
+function nextStoryPage() {
+  storyPageIndex++;
+  const onFinish = window._storyFinishCallback;
+  if (storyPageIndex >= storyPages.length) {
+    document.getElementById('story-screen').classList.remove('show');
+    if (onFinish) onFinish();
+  } else {
+    typeStoryPage(onFinish);
+  }
 }
+
+
 let gameStartTime = null;
 let gameDuration = 7200;
 let gamePollingInterval = null;
