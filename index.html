@@ -148,23 +148,23 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
 /* Leaderboard — větší na mobilu */
 .lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,5,.95);z-index:3000;align-items:flex-end;justify-content:center;padding:0;}
 .lb-overlay.show{display:flex;}
-.lb-box{background:var(--navy2);border:4px solid var(--yellow);border-bottom:none;width:100%;max-width:100%;box-shadow:none;overflow:hidden;border-radius:16px 16px 0 0;max-height:88vh;display:flex;flex-direction:column;}
-.lb-header{background:var(--yellow);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-.lb-title{font-size:14px;color:var(--black);text-shadow:none;}
-.lb-close{font-family:'Press Start 2P',monospace;font-size:10px;background:var(--black);color:var(--yellow);border:none;padding:6px 10px;cursor:pointer;}
+.lb-box{background:var(--navy2);border:4px solid var(--yellow);border-bottom:none;width:100%;max-width:100%;box-shadow:none;overflow:hidden;border-radius:16px 16px 0 0;max-height:92vh;display:flex;flex-direction:column;}
+.lb-header{background:var(--yellow);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.lb-title{font-size:16px;color:var(--black);text-shadow:none;}
+.lb-close{font-family:'Press Start 2P',monospace;font-size:12px;background:var(--black);color:var(--yellow);border:none;padding:8px 12px;cursor:pointer;}
 .lb-body{padding:16px;overflow-y:auto;flex:1;}
-.lb-row{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:8px;border:2px solid var(--navy);border-radius:4px;}
+.lb-row{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:10px;border:2px solid var(--navy);border-radius:4px;}
 .lb-row.me{border-color:var(--cyan);}
 .lb-row.rank-1{border-color:var(--yellow);background:rgba(255,230,0,.05);}
-.lb-pos{font-size:22px;font-family:'VT323',monospace;color:var(--gray);min-width:32px;}
+.lb-pos{font-size:32px;font-family:'VT323',monospace;color:var(--gray);min-width:40px;text-align:center;}
 .lb-row.rank-1 .lb-pos{color:var(--yellow);}
-.lb-name{flex:1;font-size:11px;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lb-name{flex:1;font-size:14px;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Press Start 2P',monospace;line-height:1.4;}
 .lb-row.me .lb-name{color:var(--cyan);}
-.lb-pts{font-size:28px;font-family:'VT323',monospace;color:var(--green);white-space:nowrap;}
-.lb-cp{font-size:9px;color:var(--gray);margin-top:2px;}
-.lb-refresh{font-family:'Press Start 2P',monospace;font-size:9px;padding:14px;background:var(--blue);color:var(--white);border:2px solid var(--cyan);cursor:pointer;width:100%;margin-top:4px;}
+.lb-pts{font-size:36px;font-family:'VT323',monospace;color:var(--green);white-space:nowrap;min-width:60px;text-align:right;}
+.lb-cp{font-size:10px;color:var(--gray);margin-top:4px;font-family:'VT323',monospace;}
+.lb-refresh{font-family:'Press Start 2P',monospace;font-size:11px;padding:16px;background:var(--blue);color:var(--white);border:2px solid var(--cyan);cursor:pointer;width:100%;margin-top:8px;}
 .lb-refresh:hover{background:var(--navy);}
-.lb-updated{font-size:9px;color:var(--gray);text-align:center;margin-top:8px;}
+.lb-updated{font-size:11px;color:var(--gray);text-align:center;margin-top:10px;font-family:'VT323',monospace;}
 </style>
 </head>
 <body>
