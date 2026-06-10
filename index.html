@@ -1034,7 +1034,11 @@ function initMap() {
 }
 
 function renderMarkers() {
-  Object.values(markers).forEach(m => { map.removeLayer(m.marker); map.removeLayer(m.circle); });
+  Object.values(markers).forEach(m => {
+    map.removeLayer(m.marker);
+    map.removeLayer(m.circle);
+    if (m.searchCircle) map.removeLayer(m.searchCircle);
+  });
   markers = {};
   // Zobraz pouze splněné + aktuální checkpoint
   questions.forEach((q, i) => {
@@ -1047,8 +1051,8 @@ function renderMarkers() {
 
 function getMarkerHTML(q, num, cls) {
   const route = ROUTES[routeIndex] || ROUTES[0];
-  const icon = q.markerIcon || '📍';
-  const borderColor = cls === 'locked' ? 'var(--gray)' : cls === 'answered' ? 'var(--gray)' : route.color;
+  const icon = cls === 'answered' ? '✅' : q.markerIcon || '📍';
+  const borderColor = cls === 'locked' ? 'var(--gray)' : cls === 'answered' ? '#00ff66' : route.color;
   return `<div class="px-marker ${cls}" id="m-${q.id}" style="border-color:${borderColor}">${icon}<span class="m-num">${String(num).padStart(2,'0')}</span></div>`;
 }
 
@@ -1064,8 +1068,12 @@ function placeMarker(q, num) {
     else openQuestion(q.id);
   });
   const route = ROUTES[routeIndex] || ROUTES[0];
-  const circle = L.circle([q.lat, q.lng], { radius: q.radius||30, color: route.color, fillColor: route.color, fillOpacity: .07, weight: 1.5, dashArray: '4 4', interactive: false }).addTo(map);
-  markers[q.id] = { marker, circle };
+  // Malý trigger kruh — neviditelný pro hráče (jen admin ho vidí přes admin panel)
+  const circle = L.circle([q.lat, q.lng], { radius: q.radius||30, color: route.color, fillColor: route.color, fillOpacity: 0, weight: 0, interactive: false }).addTo(map);
+  // Velký hledací kruh — viditelný pro hráče
+  const searchRadius = (q.radius || 30) * 5;
+  const searchCircle = L.circle([q.lat, q.lng], { radius: searchRadius, color: route.color, fillColor: route.color, fillOpacity: .04, weight: 1.5, dashArray: '8 6', opacity: 0.5, interactive: false }).addTo(map);
+  markers[q.id] = { marker, circle, searchCircle };
 }
 
 // ── GPS ──
@@ -1265,6 +1273,8 @@ function refreshMarker(id) {
   const cp=questions.find(x=>x.id===id); if (!cp||!markers[id]) return;
   const num=questions.indexOf(cp)+1;
   markers[id].marker.setIcon(L.divIcon({ className:'', html:getMarkerHTML(cp,num,'answered'), iconSize:[40,40], iconAnchor:[20,20] }));
+  // Skryj velký hledací kruh po splnění
+  if (markers[id].searchCircle) markers[id].searchCircle.setStyle({ opacity: 0.1, fillOpacity: 0.01 });
 }
 
 // ── SKÓRE ──

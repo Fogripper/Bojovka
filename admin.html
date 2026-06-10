@@ -361,6 +361,7 @@ select { cursor: pointer; }
         <div style="display:flex;gap:8px;margin-bottom:8px;">
           <button class="btn btn-primary" onclick="createLobby()" style="flex:1;background:#8b5cf6;border-color:#7c3aed;">+ Vytvořit novou lobby</button>
         </div>
+        <button class="btn btn-secondary btn-sm" style="width:100%;margin-bottom:8px;" onclick="syncCheckpointsToWorker(GAME_ID).then(()=>toast('Checkpointy synchronizovány ✓'))">↑ Synchronizovat checkpointy na Worker</button>
         <div id="lobby-list-mini" style="font-size:11px;color:var(--muted);">Načítám předchozí lobby...</div>
       </div>
 
@@ -644,7 +645,18 @@ function addAdminMarker(q, num) {
     html: `<div style="width:32px;height:32px;background:#2563eb;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${q.markerIcon || '📍'}</div>`,
     iconSize: [32, 32], iconAnchor: [16, 16]
   });
-  adminMarkers[q.id] = L.marker([q.lat, q.lng], { icon }).addTo(adminMap);
+  const marker = L.marker([q.lat, q.lng], { icon }).addTo(adminMap);
+  // Malý trigger kruh — viditelný jen pro admina
+  const triggerCircle = L.circle([q.lat, q.lng], {
+    radius: q.radius || 30, color: '#ff6600', fillColor: '#ff6600',
+    fillOpacity: .15, weight: 2, dashArray: '4 3', interactive: false
+  }).addTo(adminMap);
+  // Velký hledací kruh
+  const searchCircle = L.circle([q.lat, q.lng], {
+    radius: (q.radius || 30) * 5, color: '#2563eb', fillColor: '#2563eb',
+    fillOpacity: .04, weight: 1, dashArray: '8 6', opacity: 0.4, interactive: false
+  }).addTo(adminMap);
+  adminMarkers[q.id] = { marker, triggerCircle, searchCircle };
 }
 
 // ── GPS ──
@@ -716,7 +728,7 @@ function addQuestion() {
 function deleteQuestion(id) {
   if (!confirm('Smazat tento checkpoint?')) return;
   questions = questions.filter(q => q.id !== id); delete progress[id]; saveQ(); saveP();
-  if (adminMarkers[id]) { adminMap.removeLayer(adminMarkers[id]); delete adminMarkers[id]; }
+  if (adminMarkers[id]) { const m=adminMarkers[id]; adminMap.removeLayer(m.marker||m); if(m.triggerCircle) adminMap.removeLayer(m.triggerCircle); if(m.searchCircle) adminMap.removeLayer(m.searchCircle); delete adminMarkers[id]; }
   renderList(); toast('Smazáno');
 }
 
@@ -866,7 +878,7 @@ function saveEdit() {
     .split(',').map(s=>s.trim()).filter(Boolean);
   questions[idx] = { ...questions[idx], text: document.getElementById('edit-q').value.trim(), answer: document.getElementById('edit-ans').value.trim(), hint: document.getElementById('edit-hint').value.trim(), lat, lng, radius: parseInt(document.getElementById('edit-rad').value) || 30, points: parseInt(document.getElementById('edit-pts').value) || 1, markerIcon: icon, markerType: icon, lobbies: editLobbies };
   saveQ();
-  if (adminMarkers[editingId]) { adminMap.removeLayer(adminMarkers[editingId]); delete adminMarkers[editingId]; }
+  if (adminMarkers[editingId]) { const m=adminMarkers[editingId]; adminMap.removeLayer(m.marker||m); if(m.triggerCircle) adminMap.removeLayer(m.triggerCircle); if(m.searchCircle) adminMap.removeLayer(m.searchCircle); delete adminMarkers[editingId]; }
   addAdminMarker(questions[idx], idx + 1);
   renderList(); closeEdit(); toast('Checkpoint uložen ✓');
   if (GAME_ID) syncCheckpointsToWorker(GAME_ID);
@@ -1080,21 +1092,26 @@ function setActiveLobby(code) {
 }
 
 async function syncCheckpointsToWorker(code) {
-  const gid = code || GAME_ID;
-  // Filtruj checkpointy pro tuto lobby
-  const lobbyCheckpoints = questions.filter(q => {
-    if (!q.lobbies || q.lobbies.length === 0) return false;
-    return q.lobbies.includes(gid.toUpperCase());
-  });
-  if (!lobbyCheckpoints.length) return; // nic k nahrání
+  const gid = (code || GAME_ID || '').toUpperCase();
+  if (!gid) { toast('Nejprve vyber lobby'); return; }
+  // Načti aktuální checkpointy ze storage
+  const allQ = JSON.parse(localStorage.getItem('bojovka_questions') || '[]');
+  const lobbyCheckpoints = allQ.filter(q =>
+    q.lobbies && q.lobbies.length > 0 && q.lobbies.includes(gid)
+  );
+  if (!lobbyCheckpoints.length) {
+    toast(`Žádné checkpointy pro lobby ${gid}`);
+    return;
+  }
   try {
-    await fetch(`${WORKER_URL}/checkpoints`, {
+    const res = await fetch(`${WORKER_URL}/checkpoints`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ secret: ADMIN_SECRET, gameId: gid, checkpoints: lobbyCheckpoints })
     });
-    console.log(`Nahráno ${lobbyCheckpoints.length} checkpointů pro lobby ${gid}`);
-  } catch(e) { console.error('Sync checkpoints:', e); }
+    const data = await res.json();
+    if (data.ok) console.log(`Nahráno ${lobbyCheckpoints.length} checkpointů pro lobby ${gid}`);
+  } catch(e) { toast('Chyba sync: ' + e.message); }
 }
 
 async function loadLobbyList() {
@@ -1102,14 +1119,21 @@ async function loadLobbyList() {
   try {
     const res = await fetch(`${WORKER_URL}/lobby/list?secret=${ADMIN_SECRET}`);
     const data = await res.json();
-    if (!data.ok || !data.lobbies.length) { el.textContent = 'Žádné předchozí lobby.'; return; }
+    // Vždy přidej TEST lobby na začátek
+    const lobbies = data.ok ? data.lobbies : [];
+    const testEntry = { code: 'TEST', name: 'Test lobby (fixní)', created: 0 };
+    const allLobbies = [testEntry, ...lobbies.filter(l => l.code !== 'TEST')].slice(0, 6);
     el.innerHTML = '<div style="margin-bottom:6px;font-size:11px;font-weight:600;">Předchozí lobby:</div>' +
-      data.lobbies.slice(0, 5).map(l => `
+      allLobbies.map(l => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);">
           <span style="font-weight:600;letter-spacing:2px;cursor:pointer;color:${l.code === GAME_ID ? '#8b5cf6' : 'var(--text)'}" onclick="setActiveLobby('${l.code}')">${l.code}</span>
-          <span style="font-size:10px;color:var(--muted);">${new Date(l.created).toLocaleDateString('cs-CZ')}</span>
+          <span style="font-size:10px;color:var(--muted);">${l.created ? new Date(l.created).toLocaleDateString('cs-CZ') : 'permanentní'}</span>
         </div>`).join('');
-  } catch(e) { el.textContent = 'Nepodařilo se načíst.'; }
+  } catch(e) {
+    // Fallback — aspoň TEST
+    el.innerHTML = '<div style="margin-bottom:6px;font-size:11px;font-weight:600;">Předchozí lobby:</div>' +
+      `<div style="padding:4px 0;"><span style="font-weight:600;letter-spacing:2px;cursor:pointer;color:var(--text)" onclick="setActiveLobby('TEST')">TEST</span> <span style="font-size:10px;color:var(--muted);">permanentní</span></div>`;
+  }
 }
 
 function initLobbyPanel() {
@@ -1402,7 +1426,7 @@ function importData(ev) {
       if (data.questions) { questions = data.questions; saveQ(); }
       if (data.progress)  { progress = data.progress; saveP(); }
       if (data.questionBank) { questionBank = data.questionBank; saveBank(); }
-      Object.values(adminMarkers).forEach(m => adminMap.removeLayer(m)); adminMarkers = {};
+      Object.values(adminMarkers).forEach(m => { adminMap.removeLayer(m.marker||m); if(m.triggerCircle) adminMap.removeLayer(m.triggerCircle); if(m.searchCircle) adminMap.removeLayer(m.searchCircle); }); adminMarkers = {};
       questions.forEach((q, i) => addAdminMarker(q, i + 1));
       renderList(); renderBank(); updateBankStats(); toast('Importováno ✓');
     } catch { toast('Chyba při importu'); }
@@ -1418,7 +1442,7 @@ function resetProgress() {
 function resetAll() {
   if (!confirm('Opravdu smazat VEŠKERÁ data?')) return;
   questions = []; progress = {}; questionBank = []; saveQ(); saveP(); saveBank();
-  Object.values(adminMarkers).forEach(m => adminMap.removeLayer(m)); adminMarkers = {};
+  Object.values(adminMarkers).forEach(m => { adminMap.removeLayer(m.marker||m); if(m.triggerCircle) adminMap.removeLayer(m.triggerCircle); if(m.searchCircle) adminMap.removeLayer(m.searchCircle); }); adminMarkers = {};
   renderList(); renderBank(); updateBankStats(); toast('Vše smazáno');
 }
 
