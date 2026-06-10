@@ -165,7 +165,7 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
 .lb-route{font-size:14px;font-family:'VT323',monospace;margin-top:2px;}
 .lb-refresh{font-family:'Press Start 2P',monospace;font-size:13px;padding:18px;background:var(--blue);color:var(--white);border:2px solid var(--cyan);cursor:pointer;width:100%;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:12px;}
 .lb-refresh:hover{background:var(--navy);}
-.lb-refresh-icon{font-size:22px;line-height:1;}
+.lb-refresh-icon{font-size:18px;line-height:1;display:inline-flex;align-items:center;transform:translateY(1px);}
 .lb-updated{font-size:14px;color:var(--gray);text-align:center;margin-top:10px;font-family:'VT323',monospace;}
 </style>
 </head>
@@ -325,7 +325,7 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
     </div>
     <div class="lb-body">
       <div id="lb-list" class="lb-empty">Načítám...</div>
-      <button class="lb-refresh" onclick="refreshLeaderboard()"><span class="lb-refresh-icon">↺</span> AKTUALIZOVAT</button>
+      <button class="lb-refresh" onclick="refreshLeaderboard()"><span class="lb-refresh-icon">🔄</span> AKTUALIZOVAT</button>
       <div class="lb-updated" id="lb-updated"></div>
     </div>
   </div>
