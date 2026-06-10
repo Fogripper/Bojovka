@@ -1149,7 +1149,14 @@ function openQuestion(id) {
   res.className='q-result'; res.textContent='';
   const alreadyDone = !!progress[id]?.lastAnswered;
   let questionObj;
-  if (cp.text && cp.text.trim()) {
+  // Pokud checkpoint byl splněn, zobraz uloženou otázku
+  if (alreadyDone && progress[id].savedQuestion) {
+    const sq = progress[id].savedQuestion;
+    activeQBankQ = null;
+    questionObj = { question: sq.question, answer: sq.answer, category: sq.category, icon: sq.icon };
+    document.getElementById('q-icon').textContent = sq.icon || '❓';
+    document.getElementById('q-cat').textContent = sq.category || 'OTÁZKA';
+  } else if (cp.text && cp.text.trim()) {
     activeQBankQ=null; questionObj=cp;
     document.getElementById('q-icon').textContent=cp.markerIcon||'📍';
     document.getElementById('q-cat').textContent='CHECKPOINT';
@@ -1195,14 +1202,14 @@ async function submitAnswer() {
       if (!hintUsed) { streakCount++; localStorage.setItem('bojovka_streak_'+teamName,streakCount); if (streakCount%STREAK_EVERY===0) { earned+=STREAK_BONUS; bonusMsg+=' 🔥 STREAK +'+STREAK_BONUS+'!'; } }
       else { streakCount=0; localStorage.setItem('bojovka_streak_'+teamName,0); }
       const gotSpeed=await checkSpeedBonus(cp.id); if (gotSpeed) { earned+=1; bonusMsg+=' ⚡ PRVNÍ! +1'; }
-      progress[cp.id]={unlocked:true,hintUsed,...progress[cp.id],lastAnswered:Date.now(),correct:true,pts:earned};
+      progress[cp.id]={unlocked:true,hintUsed,...progress[cp.id],lastAnswered:Date.now(),correct:true,pts:earned,savedQuestion:{question:questionObj.question||questionObj.text,answer:correctAnswer,category:questionObj.category||'',icon:questionObj.icon||cp.markerIcon||'❓'}};
       totalScore+=earned;
       let msg='★ SPRÁVNĚ! +'+earned+' BODŮ'; if (hintUsed) msg+=' (NÁPOVĚDA -1)'; if (bonusMsg) msg+=bonusMsg;
       const sp=streakCount%STREAK_EVERY; if (sp>0) msg+=' ['+sp+'/'+STREAK_EVERY+' ke streaku]';
       res.className='q-result correct'; res.textContent=msg;
     } else {
       streakCount=0; localStorage.setItem('bojovka_streak_'+teamName,0);
-      progress[cp.id]={unlocked:true,hintUsed,...progress[cp.id],lastAnswered:Date.now(),correct:false,pts:0};
+      progress[cp.id]={unlocked:true,hintUsed,...progress[cp.id],lastAnswered:Date.now(),correct:false,pts:0,savedQuestion:{question:questionObj.question||questionObj.text,answer:correctAnswer,category:questionObj.category||'',icon:questionObj.icon||cp.markerIcon||'❓'}};
       res.className='q-result wrong'; res.textContent='✕ ŠPATNĚ. ODPOVĚĎ: '+correctAnswer;
     }
     inp.style.display='none'; btn.style.display='none';
