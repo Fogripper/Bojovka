@@ -575,6 +575,9 @@ function launchGame() {
     localStorage.setItem(QBANK_KEY, JSON.stringify(QUESTION_BANK));
   }
 
+  // Hned zaregistruj tým na Worker aby ho admin viděl
+  publishScore();
+
   // Načti příběh a zobraz, pak checkGameState
   loadAndShowStory(() => checkGameState());
 }
