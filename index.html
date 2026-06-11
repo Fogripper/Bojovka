@@ -261,7 +261,9 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
   </div>
 </div>
 
-<style>@keyframes spin { to { transform: rotate(360deg); } }
+<style>/* Skryj accuracy kruh kolem polohy */
+.leaflet-accuracy-circle { display: none !important; }
+.leaflet-pane.leaflet-accuracy-pane { display: none !important; }
 @keyframes winpulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
 @keyframes particlefall { 0%{transform:translateY(-20px) rotate(0deg);opacity:1} 100%{transform:translateY(110vh) rotate(720deg);opacity:0} }
 .win-you { animation: winpulse .8s ease-in-out infinite; }
@@ -1122,13 +1124,12 @@ function startGPS() {
 function updateUserDot(acc) {
   const ll = [userLat, userLng];
   if (!userMarker) {
-    const icon = L.divIcon({ className: '', html: `<div style="width:14px;height:14px;background:#00e5ff;border:3px solid #fff;box-shadow:0 0 12px #00e5ff;animation:blink8 1s step-end infinite"></div>`, iconSize:[14,14], iconAnchor:[7,7] });
+    const icon = L.divIcon({ className: '', html: `<div style="width:14px;height:14px;background:#00e5ff;border:3px solid #fff;box-shadow:0 0 4px #00e5ff;animation:blink8 1s step-end infinite"></div>`, iconSize:[14,14], iconAnchor:[7,7] });
     userMarker = L.marker(ll, { icon, zIndexOffset: 1000 }).addTo(map);
     map.setView(ll, 16);
   } else { userMarker.setLatLng(ll); }
   const color = acc <= GPS_THRESHOLD ? '#00e5ff' : '#ffe600';
-  if (accuracyCircle) { accuracyCircle.setLatLng(ll).setRadius(acc).setStyle({ color, fillColor: color }); }
-  else { accuracyCircle = L.circle(ll, { radius: acc, color, fillColor: color, fillOpacity: .06, weight: 1, dashArray: '3 3', interactive: false }).addTo(map); }
+  // Accuracy circle odstraněn — zobrazuje se jen ikona polohy
 }
 
 function checkProximity() {
