@@ -1040,10 +1040,14 @@ function renderMarkers() {
     if (m.searchCircle) map.removeLayer(m.searchCircle);
   });
   markers = {};
-  // Zobraz pouze splněné + aktuální checkpoint
+  // Zobraz jen checkpointy které jsou "dostupné":
+  // - splněné (done)
+  // - aktuální (currentCheckpointIndex) = velký kruh viditelný
+  // - předchozí splněné odhalí aktuální kruh
   questions.forEach((q, i) => {
     const done = !!progress[q.id]?.lastAnswered;
-    if (done || i === currentCheckpointIndex) {
+    const isCurrent = i === currentCheckpointIndex;
+    if (done || isCurrent) {
       placeMarker(q, i + 1);
     }
   });
@@ -1080,9 +1084,15 @@ function placeMarker(q, num) {
     openQuestion(q.id);
   });
 
-  // Malý trigger kruh — neviditelný
-  const circle = L.circle([q.lat, q.lng], { radius: q.radius||30, color: route.color, fillColor: route.color, fillOpacity: 0, weight: 0, interactive: false }).addTo(map);
-  // Velký hledací kruh — vždy viditelný (dokud není splněno)
+  // Malý trigger kruh — viditelný jen po odemknutí (hráč byl v dosahu)
+  const triggerVisible = unlocked || answered;
+  const circle = L.circle([q.lat, q.lng], {
+    radius: q.radius||30, color: route.color, fillColor: route.color,
+    fillOpacity: triggerVisible ? 0.12 : 0,
+    weight: triggerVisible ? 1.5 : 0,
+    dashArray: '4 3', interactive: false
+  }).addTo(map);
+  // Velký hledací kruh — viditelný pro aktuální a nesplněné
   const searchRadius = (q.radius || 30) * 5;
   const searchOpacity = answered ? 0.1 : 0.5;
   const searchFill = answered ? 0.01 : 0.04;
