@@ -474,6 +474,8 @@ let countdownInterval = null;
 let currentCheckpointIndex = 0;
 let gameOver = false; // flag — hra skončila, zastav veškerý polling
 let locationInterval = null;
+let eventsInterval = null;
+let lastEventTime = Date.now();
 
 const BUILTIN_QUESTIONS = [
   {id:"cz01",question:"Jak se jmenoval maskot České pojišťovny — animovaný zelený tvor?",answer:"Rákosníček",hint:"Skřítek z pohádky, zelený, bydlí u vody",category:"🇨🇿 Česká popkultura",icon:"📺"},
@@ -768,6 +770,7 @@ function showGameRunning() {
   dbg("showGameRunning map=" + (!!map) + " q=" + questions.length);
   clearInterval(waitingDotsInterval);
   startLocationSharing();
+  startEventsPolling();
   const ws = document.getElementById('waiting-screen'); if (ws) ws.classList.remove('show');
   const cs = document.getElementById('countdown-screen'); if (cs) cs.classList.remove('show');
 
@@ -802,6 +805,7 @@ function showGameOver() {
   clearInterval(countdownInterval);
   clearInterval(gamePollingInterval);
   clearInterval(locationInterval);
+  clearInterval(eventsInterval);
   gamePollingInterval = null;
   const bar = document.getElementById('countdown-bar');
   if (bar) bar.style.display = 'none';
@@ -809,8 +813,52 @@ function showGameOver() {
   fetchAndShowWinner();
 }
 
+// ── HERNÍ UDÁLOSTI ──
+function startEventsPolling() {
+  lastEventTime = Date.now();
+  clearInterval(eventsInterval);
+  eventsInterval = setInterval(async () => {
+    if (gameOver) { clearInterval(eventsInterval); return; }
+    try {
+      const res = await fetch(`${WORKER_URL}/events?gameId=${GAME_ID}&since=${lastEventTime}`);
+      const data = await res.json();
+      if (!data.ok) return;
+      data.events.forEach(e => {
+        if (e.team === teamName) return; // ignoruj vlastní události
+        if (e.type === 'correct') {
+          showEventToast(`🎯 ${e.team} odpověděl správně!`, '#00ff66');
+        } else if (e.type === 'streak' && e.data.streak >= 3) {
+          showEventToast(`🔥 ${e.team} má streak ×${e.data.streak}!`, '#ff6600');
+        }
+        if (e.time > lastEventTime) lastEventTime = e.time;
+      });
+      if (data.events.length > 0) lastEventTime = Date.now();
+    } catch(e) {}
+  }, 15000);
+}
+
+function showEventToast(msg, color) {
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = `position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(10,10,46,.97);border:2px solid ${color};color:${color};font-family:'Press Start 2P',monospace;font-size:8px;padding:10px 16px;text-align:center;max-width:280px;box-shadow:0 0 12px ${color};animation:fadeInOut 3.5s forwards;pointer-events:none;`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+async function postEvent(type, data) {
+  if (!teamName || !GAME_ID) return;
+  try {
+    fetch(WORKER_URL + '/event', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ team: teamName, gameId: GAME_ID, type, data: data||{} })
+    }).catch(()=>{});
+  } catch(e) {}
+}
+
 function startLocationSharing() {
   clearInterval(locationInterval);
+  clearInterval(eventsInterval);
   // Okamžitě pošli první polohu
   sendLocation();
   // Pak každých 15 sekund
@@ -1274,8 +1322,20 @@ async function submitAnswer() {
     const correct=norm(given)===norm(correctAnswer);
     if (correct) {
       let earned=Math.max(BASE_POINTS-(hintUsed?1:0),0), bonusMsg='';
-      if (!hintUsed) { streakCount++; localStorage.setItem('bojovka_streak_'+teamName,streakCount); if (streakCount%STREAK_EVERY===0) { earned+=STREAK_BONUS; bonusMsg+=' 🔥 STREAK +'+STREAK_BONUS+'!'; } }
-      else { streakCount=0; localStorage.setItem('bojovka_streak_'+teamName,0); }
+      if (!hintUsed) {
+        streakCount++;
+        localStorage.setItem('bojovka_streak_'+teamName,streakCount);
+        if (streakCount%STREAK_EVERY===0) { earned+=STREAK_BONUS; bonusMsg+=' 🔥 STREAK +'+STREAK_BONUS+'!'; }
+        // Pošli event správné odpovědi
+        postEvent('correct', { checkpoint: cp.id, streak: streakCount });
+        // Pošli streak event při dosažení 3,6,9...
+        if (streakCount >= 3 && streakCount % STREAK_EVERY === 0) {
+          postEvent('streak', { streak: streakCount });
+        }
+      } else {
+        streakCount=0;
+        localStorage.setItem('bojovka_streak_'+teamName,0);
+      }
       const gotSpeed=await checkSpeedBonus(cp.id); if (gotSpeed) { earned+=1; bonusMsg+=' ⚡ PRVNÍ! +1'; }
       progress[cp.id]={unlocked:true,hintUsed,...progress[cp.id],lastAnswered:Date.now(),correct:true,pts:earned,savedQuestion:{question:questionObj.question||questionObj.text,answer:correctAnswer,category:questionObj.category||'',icon:questionObj.icon||cp.markerIcon||'❓'}};
       totalScore+=earned;
