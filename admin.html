@@ -298,6 +298,8 @@ select { cursor: pointer; }
         <h3>📦 Vestavěná databáze (60+ otázek)</h3>
         <p>Obsahuje otázky z české popkultury 90s/2000s, videoher, anime, přírody, sportu a vědy.</p>
         <button class="btn btn-primary" onclick="loadBuiltinQuestions()">Načíst všechny otázky</button>
+        <button class="btn btn-danger btn-sm" onclick="showDislikedOnly()">👎 Špatně hodnocené</button>
+        <button class="btn btn-secondary btn-sm" onclick="renderBank()">Zobrazit vše</button>
       </div>
 
       <hr class="divider">
@@ -950,6 +952,31 @@ const BUILTIN_QUESTIONS = [
   {id:"ph04",question:"Kde bydleli pohádkový skřítci Křemílek a Vochomůrka?",answer:"V houbě",hint:"Malinký domek v lese",category:"🏰 Pohádky",icon:"🍄"},
   {id:"ph05",question:"Jak se jmenuje česká pohádka o dívce, která dostane tři oříšky?",answer:"Tři oříšky pro Popelku",hint:"Natočena v roce 1973",category:"🏰 Pohádky",icon:"👸"},
 ];
+
+async function showDislikedOnly() {
+  try {
+    const res = await fetch(`${WORKER_URL}/votes?gameId=${GAME_ID}&secret=${ADMIN_SECRET}`);
+    const data = await res.json();
+    const votes = data.votes || {};
+    const disliked = questionBank.filter(q => (votes[q.id] || 0) < 0);
+    const el = document.getElementById('bank-list');
+    if (!disliked.length) { toast('Zadne spatne hodnocene otazky'); return; }
+    el.innerHTML = disliked.map(q => {
+      const score = votes[q.id] || 0;
+      return `<div class="bq-item" style="border-color:#ef4444">
+        <div class="bq-icon">${q.icon || '❓'}</div>
+        <div class="bq-body">
+          <div class="bq-cat">${esc(q.category||'')} <span style="color:#ef4444;font-weight:600">👎 ${score}</span></div>
+          <div class="bq-text">${esc(q.question)}</div>
+          ${q.answer ? `<div class="bq-ans">✓ ${esc(q.answer)}</div>` : ''}
+        </div>
+        <button class="btn-icon" onclick="openBqEdit('${q.id}')" title="Upravit">✏️</button>
+        <button class="btn-icon" onclick="deleteBankQuestion('${q.id}')" title="Smazat">🗑️</button>
+      </div>`;
+    }).join('');
+    toast(`Nalezeno ${disliked.length} spatne hodnocenych otazek`);
+  } catch(e) { toast('Chyba: ' + e.message); }
+}
 
 function loadBuiltinQuestions() {
   let added = 0;

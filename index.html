@@ -313,6 +313,10 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
       <input class="q-input" type="text" id="q-input" placeholder="TVOJE ODPOVĚĎ...">
       <button class="btn-ok" id="q-btn" onclick="submitAnswer()">POTVRDIT</button>
       <div class="q-result" id="q-result"></div>
+      <div id="q-vote" style="display:none;justify-content:center;gap:16px;margin-top:12px;">
+        <button onclick="voteQuestion(1)" id="vote-up" style="font-size:24px;background:none;border:2px solid var(--gray);padding:6px 16px;cursor:pointer;color:white;">👍</button>
+        <button onclick="voteQuestion(-1)" id="vote-down" style="font-size:24px;background:none;border:2px solid var(--gray);padding:6px 16px;cursor:pointer;color:white;">👎</button>
+      </div>
       <div class="q-counter" id="q-counter"></div>
     </div>
   </div>
@@ -1263,7 +1267,7 @@ async function submitAnswer() {
     progress[cp.id]={unlocked:true,...progress[cp.id],lastAnswered:Date.now(),correct:null,pts:0};
     res.className='q-result open'; res.textContent='✓ CHECKPOINT SPLNĚN'; btn.style.display='none';
   }
-  saveProgress(); updateScoreDisplay(); refreshMarker(cp.id);
+  saveProgress(); updateScoreDisplay(); refreshMarker(cp.id); showVoteButtons();
 
   // Zkontroluj jestli tým dosáhl cílového skóre
   if (totalScore >= (window.WIN_SCORE_OVERRIDE || WIN_SCORE)) {
@@ -1313,6 +1317,60 @@ function refreshMarker(id) {
   markers[id].marker.setIcon(L.divIcon({ className:'', html:getMarkerHTML(cp,num,'answered'), iconSize:[40,40], iconAnchor:[20,20] }));
   // Skryj velký hledací kruh po splnění
   if (markers[id].searchCircle) markers[id].searchCircle.setStyle({ opacity: 0.1, fillOpacity: 0.01 });
+}
+
+// ── HLASOVÁNÍ ──
+function voteQuestion(val) {
+  const voteEl = document.getElementById('q-vote');
+  const upBtn   = document.getElementById('vote-up');
+  const downBtn = document.getElementById('vote-down');
+  if (!activeQBankQ && !activeQuestion) return;
+  const qId = activeQBankQ?.id || activeQuestion?.id;
+  if (!qId) return;
+
+  // Ulož hlas do localStorage + Worker
+  const votes = JSON.parse(localStorage.getItem('bojovka_votes') || '{}');
+  votes[qId] = (votes[qId] || 0) + val;
+  localStorage.setItem('bojovka_votes', JSON.stringify(votes));
+  // Pošli na Worker
+  try {
+    fetch(WORKER_URL + '/vote', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ questionId: qId, value: val, gameId: GAME_ID })
+    }).catch(()=>{});
+  } catch(e) {}
+
+  // Vizuální feedback
+  if (val === 1) {
+    upBtn.style.borderColor = '#00ff66';
+    upBtn.style.background = 'rgba(0,255,102,.15)';
+    downBtn.style.opacity = '0.3';
+  } else {
+    downBtn.style.borderColor = '#ff4444';
+    downBtn.style.background = 'rgba(255,68,68,.15)';
+    upBtn.style.opacity = '0.3';
+  }
+  upBtn.onclick = null;
+  downBtn.onclick = null;
+  toast(val === 1 ? '👍 Díky za feedback!' : '👎 Díky, otázku přehodnotíme');
+}
+
+function showVoteButtons() {
+  const voteEl = document.getElementById('q-vote');
+  const upBtn   = document.getElementById('vote-up');
+  const downBtn = document.getElementById('vote-down');
+  if (!voteEl) return;
+  // Reset
+  upBtn.style.borderColor = 'var(--gray)';
+  upBtn.style.background = 'none';
+  upBtn.style.opacity = '1';
+  downBtn.style.borderColor = 'var(--gray)';
+  downBtn.style.background = 'none';
+  downBtn.style.opacity = '1';
+  upBtn.onclick = () => voteQuestion(1);
+  downBtn.onclick = () => voteQuestion(-1);
+  voteEl.style.display = 'flex';
 }
 
 // ── SKÓRE ──
