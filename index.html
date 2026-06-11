@@ -1051,28 +1051,42 @@ function renderMarkers() {
 
 function getMarkerHTML(q, num, cls) {
   const route = ROUTES[routeIndex] || ROUTES[0];
-  const icon = cls === 'answered' ? '✅' : q.markerIcon || '📍';
-  const borderColor = cls === 'locked' ? 'var(--gray)' : cls === 'answered' ? '#00ff66' : route.color;
+  let icon = q.markerIcon || '📍';
+  let borderColor = cls === 'locked' ? 'var(--gray)' : route.color;
+  if (cls === 'answered') {
+    const wasCorrect = progress[q.id]?.correct;
+    icon = wasCorrect === true ? '✅' : wasCorrect === false ? '❌' : '✓';
+    borderColor = wasCorrect === true ? '#00ff66' : wasCorrect === false ? '#ff4444' : 'var(--gray)';
+  }
   return `<div class="px-marker ${cls}" id="m-${q.id}" style="border-color:${borderColor}">${icon}<span class="m-num">${String(num).padStart(2,'0')}</span></div>`;
 }
 
 function placeMarker(q, num) {
   const answered = !!progress[q.id]?.lastAnswered;
+  const unlocked = !!progress[q.id]?.unlocked;
   const isCurrent = (num - 1) === currentCheckpointIndex;
-  const cls = answered ? 'answered' : isCurrent ? '' : 'locked';
-  const icon = L.divIcon({ className: '', html: getMarkerHTML(q, num, cls), iconSize: [40,40], iconAnchor: [20,20] });
+  const route = ROUTES[routeIndex] || ROUTES[0];
+
+  // Marker — skrytý dokud hráč nevstoupí do trigger zóny
+  // Zobraz pouze pokud: splněno, odemčeno (byl v dosahu), nebo je to aktuální a byl unlocked
+  const showMarker = answered || unlocked;
+  const cls = answered ? 'answered' : 'nearby';
+  const markerHtml = showMarker ? getMarkerHTML(q, num, cls) :
+    `<div style="width:1px;height:1px;opacity:0" id="m-${q.id}"></div>`;
+  const icon = L.divIcon({ className: '', html: markerHtml, iconSize: showMarker ? [40,40] : [1,1], iconAnchor: showMarker ? [20,20] : [0,0] });
   const marker = L.marker([q.lat, q.lng], { icon }).addTo(map);
   marker.on('click', () => {
-    if (!answered && !isCurrent) toast('NEJPRVE SPLŇ PŘEDCHOZÍ CHECKPOINT!');
-    else if (!progress[q.id]?.unlocked && !answered) toast('PŘIBLIŽ SE KE CHECKPOINTU!');
-    else openQuestion(q.id);
+    if (!progress[q.id]?.unlocked && !answered) return; // skrytý marker — neklikatelný
+    openQuestion(q.id);
   });
-  const route = ROUTES[routeIndex] || ROUTES[0];
-  // Malý trigger kruh — neviditelný pro hráče (jen admin ho vidí přes admin panel)
+
+  // Malý trigger kruh — neviditelný
   const circle = L.circle([q.lat, q.lng], { radius: q.radius||30, color: route.color, fillColor: route.color, fillOpacity: 0, weight: 0, interactive: false }).addTo(map);
-  // Velký hledací kruh — viditelný pro hráče
+  // Velký hledací kruh — vždy viditelný (dokud není splněno)
   const searchRadius = (q.radius || 30) * 5;
-  const searchCircle = L.circle([q.lat, q.lng], { radius: searchRadius, color: route.color, fillColor: route.color, fillOpacity: .04, weight: 1.5, dashArray: '8 6', opacity: 0.5, interactive: false }).addTo(map);
+  const searchOpacity = answered ? 0.1 : 0.5;
+  const searchFill = answered ? 0.01 : 0.04;
+  const searchCircle = L.circle([q.lat, q.lng], { radius: searchRadius, color: route.color, fillColor: route.color, fillOpacity: searchFill, weight: 1.5, dashArray: '8 6', opacity: searchOpacity, interactive: false }).addTo(map);
   markers[q.id] = { marker, circle, searchCircle };
 }
 
@@ -1115,10 +1129,23 @@ function checkProximity() {
     const r = q.radius || 30;
     const el = document.getElementById('m-' + q.id);
     if (dist <= r) {
-      if (!progress[q.id]?.unlocked) { if (!progress[q.id]) progress[q.id] = {}; progress[q.id].unlocked = true; saveProgress(); }
+      if (!progress[q.id]?.unlocked) {
+        if (!progress[q.id]) progress[q.id] = {};
+        progress[q.id].unlocked = true;
+        saveProgress();
+        // Zobraz marker — byl skrytý
+        const cpNum = questions.indexOf(q) + 1;
+        if (markers[q.id]) {
+          markers[q.id].marker.setIcon(L.divIcon({
+            className: '', html: getMarkerHTML(q, cpNum, 'nearby'), iconSize: [40,40], iconAnchor: [20,20]
+          }));
+        }
+      }
+      const el = document.getElementById('m-' + q.id);
       if (el) { el.classList.remove('locked'); el.classList.add('nearby'); }
       if (!nearbyNotified.has(q.id)) { nearbyNotified.add(q.id); openQuestion(q.id); }
     } else {
+      const el = document.getElementById('m-' + q.id);
       if (el) { el.classList.remove('nearby'); if (!progress[q.id]?.unlocked) el.classList.add('locked'); }
       nearbyNotified.delete(q.id);
     }
@@ -1218,7 +1245,7 @@ async function submitAnswer() {
     } else {
       streakCount=0; localStorage.setItem('bojovka_streak_'+teamName,0);
       progress[cp.id]={unlocked:true,hintUsed,...progress[cp.id],lastAnswered:Date.now(),correct:false,pts:0,savedQuestion:{question:questionObj.question||questionObj.text,answer:correctAnswer,category:questionObj.category||'',icon:questionObj.icon||cp.markerIcon||'❓'}};
-      res.className='q-result wrong'; res.textContent='✕ ŠPATNĚ. ODPOVĚĎ: '+correctAnswer;
+      res.className='q-result wrong'; res.textContent='✕ SPATNE — BEZ BODU';
     }
     inp.style.display='none'; btn.style.display='none';
   } else {
