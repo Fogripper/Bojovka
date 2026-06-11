@@ -1,5 +1,5 @@
 // BOJOVKA Service Worker — offline cache
-const CACHE = 'bojovka-v1';
+const CACHE = 'bojovka-v2';
 const ASSETS = [
   '/',
   '/index.html',
