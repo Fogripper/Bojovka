@@ -1096,7 +1096,7 @@ function placeMarker(q, num) {
   const searchRadius = (q.radius || 30) * 5;
   const searchOpacity = answered ? 0.1 : 0.5;
   const searchFill = answered ? 0.01 : 0.04;
-  const searchCircle = L.circle([q.lat, q.lng], { radius: searchRadius, color: '#ffe600', fillColor: route.color, fillOpacity: searchFill, weight: answered ? 1 : 3, dashArray: '10 6', opacity: searchOpacity, interactive: false }).addTo(map);
+  const searchCircle = L.circle([q.lat, q.lng], { radius: searchRadius, color: '#ffe600', fillOpacity: 0, weight: answered ? 1 : 3, dashArray: '10 6', opacity: answered ? 0.15 : 0.9, interactive: false }).addTo(map);
   markers[q.id] = { marker, circle, searchCircle };
 }
 
