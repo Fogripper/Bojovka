@@ -473,6 +473,7 @@ let gamePollingInterval = null;
 let countdownInterval = null;
 let currentCheckpointIndex = 0;
 let gameOver = false; // flag — hra skončila, zastav veškerý polling
+let locationInterval = null;
 
 const BUILTIN_QUESTIONS = [
   {id:"cz01",question:"Jak se jmenoval maskot České pojišťovny — animovaný zelený tvor?",answer:"Rákosníček",hint:"Skřítek z pohádky, zelený, bydlí u vody",category:"🇨🇿 Česká popkultura",icon:"📺"},
@@ -766,6 +767,7 @@ function showWaiting() {
 function showGameRunning() {
   dbg("showGameRunning map=" + (!!map) + " q=" + questions.length);
   clearInterval(waitingDotsInterval);
+  startLocationSharing();
   const ws = document.getElementById('waiting-screen'); if (ws) ws.classList.remove('show');
   const cs = document.getElementById('countdown-screen'); if (cs) cs.classList.remove('show');
 
@@ -799,11 +801,34 @@ function showGameOver() {
   gameOver = true;
   clearInterval(countdownInterval);
   clearInterval(gamePollingInterval);
+  clearInterval(locationInterval);
   gamePollingInterval = null;
   const bar = document.getElementById('countdown-bar');
   if (bar) bar.style.display = 'none';
   closeOverlay();
   fetchAndShowWinner();
+}
+
+function startLocationSharing() {
+  clearInterval(locationInterval);
+  // Okamžitě pošli první polohu
+  sendLocation();
+  // Pak každých 15 sekund
+  locationInterval = setInterval(() => {
+    if (gameOver) { clearInterval(locationInterval); return; }
+    sendLocation();
+  }, 15000);
+}
+
+async function sendLocation() {
+  if (!teamName || !GAME_ID || userLat === null) return;
+  try {
+    await fetch(WORKER_URL + '/location', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ team: teamName, gameId: GAME_ID, lat: userLat, lng: userLng, accuracy: lastAccuracy || 0 })
+    });
+  } catch(e) {}
 }
 
 async function fetchAndShowWinner() {

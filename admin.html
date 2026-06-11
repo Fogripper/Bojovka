@@ -404,7 +404,11 @@ select { cursor: pointer; }
     <div class="main-panel">
       <h2 style="font-size:15px;font-weight:600;margin-bottom:12px;">Mapa checkpointů</h2>
       <div id="track-map"></div>
-      <p style="font-size:12px;color:var(--muted);">Checkpointy jsou zobrazeny na mapě. Pozice týmů nejsou k dispozici v offline režimu.</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+        <p style="font-size:12px;color:var(--muted);margin:0;">Polohy týmů se aktualizují každých 10s.</p>
+        <button class="btn btn-secondary btn-sm" onclick="loadTeamLocations()">↺ Obnovit polohy</button>
+      </div>
+      <div id="team-location-legend" style="font-size:11px;color:var(--muted);display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
   </div>
 </div>
@@ -1070,7 +1074,7 @@ function switchTab(name, btn) {
   document.getElementById(`tab-${name}`).classList.add('active');
   btn.classList.add('active');
   if (name === 'checkpoints' && adminMap) setTimeout(() => adminMap.invalidateSize(), 50);
-  if (name === 'tracking') { initTrackMap(); loadTeams(); checkAdminGameState(); initLobbyPanel(); }
+  if (name === 'tracking') { initTrackMap(); loadTeams(); checkAdminGameState(); initLobbyPanel(); startLocationPolling(); }
   if (name === 'logs') { loadLogs(); }
   if (name === 'story') { loadStory(); }
 }
@@ -1245,6 +1249,58 @@ async function checkAdminGameState() {
       }
     }
   } catch(e) {}
+}
+
+// ── LIVE POLOHY TÝMŮ ──
+const TEAM_COLORS = ['#ff4444','#00e5ff','#ffe600','#00ff66','#ff66ff','#ff9900','#66ffff','#ff66aa'];
+let locationMarkers = {};
+let locationPollingInterval = null;
+
+function startLocationPolling() {
+  loadTeamLocations();
+  clearInterval(locationPollingInterval);
+  locationPollingInterval = setInterval(loadTeamLocations, 10000);
+}
+
+async function loadTeamLocations() {
+  if (!GAME_ID) return;
+  try {
+    const res = await fetch(`${WORKER_URL}/locations?gameId=${GAME_ID}&secret=${ADMIN_SECRET}`);
+    const data = await res.json();
+    if (!data.ok) return;
+    renderTeamLocations(data.locations || []);
+  } catch(e) {}
+}
+
+function renderTeamLocations(locations) {
+  if (!trackMap) return;
+  // Odstraň staré markery
+  Object.values(locationMarkers).forEach(m => trackMap.removeLayer(m));
+  locationMarkers = {};
+  const legend = document.getElementById('team-location-legend');
+  if (legend) legend.innerHTML = '';
+
+  locations.forEach((loc, i) => {
+    const color = TEAM_COLORS[i % TEAM_COLORS.length];
+    const age = Math.round((Date.now() - loc.updated) / 1000);
+    const ageStr = age < 60 ? age + 's' : Math.round(age/60) + 'min';
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="background:${color};width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 0 8px ${color}"></div>`,
+      iconSize: [16,16], iconAnchor: [8,8]
+    });
+    const marker = L.marker([loc.lat, loc.lng], { icon }).addTo(trackMap);
+    marker.bindTooltip(`<b>${loc.team}</b><br>±${loc.accuracy}m · ${ageStr} ago`, { permanent: false });
+    locationMarkers[loc.team] = marker;
+
+    // Legenda
+    if (legend) {
+      legend.innerHTML += `<span style="display:flex;align-items:center;gap:4px;">
+        <span style="width:10px;height:10px;background:${color};border-radius:50%;display:inline-block"></span>
+        <span>${loc.team} (${ageStr})</span>
+      </span>`;
+    }
+  });
 }
 
 // ── PŘÍBĚH ──
