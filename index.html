@@ -254,6 +254,7 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
     <div style="width:40px;height:40px;border:3px solid var(--cyan);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px;"></div>
     <div style="font-family:VT323,monospace;font-size:13px;color:var(--gray);">Jakmile admin spustí hru,<br>automaticky začneš.</div>
     <div id="waiting-pulse" style="font-family:VT323,monospace;font-size:13px;color:var(--cyan);margin-top:12px;opacity:.6;">kontroluji každé 2s<span id="waiting-dots"></span></div>
+    <button onclick="confirmLeaveLobby()" style="margin-top:20px;font-family:'Press Start 2P',monospace;font-size:7px;background:transparent;color:var(--gray);border:1px solid var(--gray);padding:8px 14px;cursor:pointer;">ODEJIT Z LOBBY</button>
   </div>
 </div>
 
@@ -1474,6 +1475,13 @@ async function submitAnswer() {
         if (streakCount%STREAK_EVERY===0) { earned+=STREAK_BONUS; bonusMsg+=' 🔥 STREAK +'+STREAK_BONUS+'!'; }
         // Pošli event správné odpovědi
         postEvent('correct', { checkpoint: cp.id, streak: streakCount });
+        // Ulož log do DB
+        fetch(WORKER_URL + '/db/score-log', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ team: teamName, gameId: GAME_ID, checkpoint: cp.id,
+            question: questionObj?.question || cp.text || '', answer: inp?.value || '',
+            correct: true, points: earned })
+        }).catch(()=>{});
         // Pošli streak event při dosažení 3,6,9...
         if (streakCount >= 3 && streakCount % STREAK_EVERY === 0) {
           postEvent('streak', { streak: streakCount });
@@ -1481,6 +1489,13 @@ async function submitAnswer() {
       } else {
         streakCount=0;
         localStorage.setItem('bojovka_streak_'+teamName,0);
+        // Ulož log špatné odpovědi
+        fetch(WORKER_URL + '/db/score-log', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ team: teamName, gameId: GAME_ID, checkpoint: cp.id,
+            question: questionObj?.question || cp.text || '', answer: inp?.value || '',
+            correct: false, points: 0 })
+        }).catch(()=>{});
       }
       const gotSpeed=await checkSpeedBonus(cp.id); if (gotSpeed) { earned+=1; bonusMsg+=' ⚡ PRVNÍ! +1'; }
       progress[cp.id]={unlocked:true,hintUsed,...progress[cp.id],lastAnswered:Date.now(),correct:true,pts:earned,savedQuestion:{question:questionObj.question||questionObj.text,answer:correctAnswer,category:questionObj.category||'',icon:questionObj.icon||cp.markerIcon||'❓'}};

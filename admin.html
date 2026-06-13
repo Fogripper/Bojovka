@@ -201,6 +201,7 @@ select { cursor: pointer; }
   <button class="tab-btn" onclick="switchTab('tracking', this)">👥 Sledování týmů</button>
   <button class="tab-btn" onclick="switchTab('story', this)">📖 Příběh</button>
   <button class="tab-btn" onclick="switchTab('logs', this)">📋 Logy</button>
+  <button class="tab-btn" onclick="switchTab('scorelogs', this)">🎯 Bodování</button>
   <button class="tab-btn" onclick="switchTab('export', this)">💾 Export / Import</button>
 </div>
 
@@ -460,6 +461,17 @@ Skupiny dobrodruhů se vydaly do lesa..."></textarea>
   </div>
 </div>
 
+<!-- TAB: BODOVÁNÍ -->
+<div id="tab-scorelogs" class="tab-pane">
+  <div style="padding:20px;max-width:900px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h2 style="font-size:15px;font-weight:600;">Logy bodování týmů</h2>
+      <button class="btn btn-secondary btn-sm" onclick="loadScoreLogs()">↺ Obnovit</button>
+    </div>
+    <div id="scorelogs-container"><div style="padding:40px;text-align:center;color:var(--muted);font-size:13px;">Klikni Obnovit pro načtení.</div></div>
+  </div>
+</div>
+
 <!-- TAB: EXPORT -->
 <div id="tab-export" class="tab-pane">
   <div class="export-section">
@@ -616,12 +628,65 @@ let trackMap = null;
 // ── PRELOAD ──
 const PRELOAD = {"questions":[{"id":"mpycpbd9js69","text":"","answer":"","hint":"","lat":49.543977,"lng":14.175043,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpj9f9hk5","text":"","answer":"","hint":"","lat":49.543709,"lng":14.177347,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpm14xbji","text":"","answer":"","hint":"","lat":49.542226,"lng":14.174359,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpokewr3d","text":"","answer":"","hint":"","lat":49.542337,"lng":14.178157,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpqidvks4","text":"","answer":"","hint":"","lat":49.542922,"lng":14.180474,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpsonxk8h","text":"","answer":"","hint":"","lat":49.541613,"lng":14.179809,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpv6usxxm","text":"","answer":"","hint":"","lat":49.54114,"lng":14.181333,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycpws2w98x","text":"","answer":"","hint":"","lat":49.540068,"lng":14.180925,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycq2aknuxx","text":"","answer":"","hint":"","lat":49.537812,"lng":14.180367,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycq3uqsqvw","text":"","answer":"","hint":"","lat":49.53997,"lng":14.18247,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycq5ycsqua","text":"","answer":"","hint":"","lat":49.536949,"lng":14.18247,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"},{"id":"mpycqufikmrd","text":"","answer":"","hint":"","lat":49.54048817042011,"lng":14.17728800110108,"radius":30,"points":1,"markerIcon":"📍","markerType":"📍"}]};
 
-function init() {
+// ── PERMANENTNÍ DB ──
+async function loadDbCheckpoints() {
+  try {
+    const res = await fetch(`${WORKER_URL}/db/checkpoints`);
+    const data = await res.json();
+    if (data.ok && data.checkpoints && data.checkpoints.length > 0) {
+      questions = data.checkpoints;
+      saveQ();
+      console.log(`✅ DB: načteno ${questions.length} checkpointů`);
+      return true;
+    }
+  } catch(e) { console.warn('DB checkpoints:', e.message); }
+  return false;
+}
+
+async function saveDbCheckpoints() {
+  try {
+    const res = await fetch(`${WORKER_URL}/db/checkpoints`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ secret: ADMIN_SECRET, checkpoints: questions })
+    });
+    const d = await res.json();
+    if (d.ok) console.log(`✅ DB: uloženo ${questions.length} checkpointů`);
+  } catch(e) { console.warn('Uložení checkpointů:', e.message); }
+}
+
+async function loadDbQuestions() {
+  try {
+    const res = await fetch(`${WORKER_URL}/db/questions`);
+    const data = await res.json();
+    if (data.ok && data.questions && data.questions.length > 0) {
+      questionBank = data.questions;
+      saveBank();
+      console.log(`✅ DB: načteno ${questionBank.length} otázek`);
+      return true;
+    }
+  } catch(e) { console.warn('DB questions:', e.message); }
+  return false;
+}
+
+async function saveDbQuestions() {
+  try {
+    await fetch(`${WORKER_URL}/db/questions`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ secret: ADMIN_SECRET, questions: questionBank })
+    });
+  } catch(e) { console.warn('Uložení otázek:', e.message); }
+}
+
+async function init() {
+  // Načti lokální data jako fallback
   const storedQ = localStorage.getItem(STORAGE_KEY);
   questions    = storedQ ? JSON.parse(storedQ) : PRELOAD.questions;
   if (!storedQ) localStorage.setItem(STORAGE_KEY, JSON.stringify(questions));
   progress     = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}');
   questionBank = JSON.parse(localStorage.getItem(QBANK_KEY)    || '[]');
+
   initMap();
   renderIconPicker();
   document.getElementById('edit-icon-picker').innerHTML = MARKER_ICONS.map(icon =>
@@ -631,6 +696,14 @@ function init() {
   renderBank();
   startGPS();
   updateBankStats();
+
+  // Načti z DB (přepíše lokální data pokud DB má data)
+  const dbLoaded = await loadDbCheckpoints();
+  if (dbLoaded) { renderList(); }
+  const dbQLoaded = await loadDbQuestions();
+  if (dbQLoaded) { renderBank(); updateBankStats(); }
+
+  if (dbLoaded || dbQLoaded) toast('✅ Data načtena z databáze');
 }
 
 // ── MAP ──
@@ -1016,6 +1089,51 @@ const BUILTIN_QUESTIONS = [
   {id:"dj15",question:"Kdo byl Albert Einstein?",answer:"Fyzik autor teorie relativity",hint:"Nemecko-americky vedec",category:"Dejepis",icon:"🔭"}
 ];
 
+async function loadScoreLogs() {
+  const el = document.getElementById('scorelogs-container');
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">Načítám...</div>';
+  try {
+    const res = await fetch(`${WORKER_URL}/db/score-log?gameId=${GAME_ID}&secret=${ADMIN_SECRET}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    const logs = data.logs || {};
+    const teams = Object.keys(logs);
+    if (!teams.length) { el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);">Žádné záznamy.</div>'; return; }
+    el.innerHTML = teams.map(team => {
+      const entries = logs[team] || [];
+      const correct = entries.filter(e => e.correct).length;
+      const wrong = entries.filter(e => !e.correct).length;
+      const pts = entries.reduce((s,e) => s+(e.points||0), 0);
+      const rows = [...entries].reverse().map(e => `
+        <tr style="background:${e.correct?'rgba(0,255,102,.05)':'rgba(255,68,68,.05)'}">
+          <td style="padding:6px 8px;font-size:11px;">${new Date(e.time).toLocaleTimeString('cs-CZ')}</td>
+          <td style="padding:6px 8px;font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.question||'-')}</td>
+          <td style="padding:6px 8px;font-size:11px;">${esc(e.answer||'-')}</td>
+          <td style="padding:6px 8px;font-size:12px;text-align:center;">${e.correct?'✅':'❌'}</td>
+          <td style="padding:6px 8px;font-size:12px;text-align:center;color:${e.correct?'#00ff66':'#ff4444'}">+${e.points||0}</td>
+        </tr>`).join('');
+      return `<div style="margin-bottom:20px;border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+        <div style="background:var(--accent);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:13px;font-weight:600;">👤 ${esc(team)}</span>
+          <span style="font-size:11px;">✅ ${correct} správně · ❌ ${wrong} špatně · 🏆 ${pts} bodů</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr style="background:var(--bg);">
+              <th style="padding:6px 8px;font-size:10px;text-align:left;color:var(--muted);">Čas</th>
+              <th style="padding:6px 8px;font-size:10px;text-align:left;color:var(--muted);">Otázka</th>
+              <th style="padding:6px 8px;font-size:10px;text-align:left;color:var(--muted);">Odpověď</th>
+              <th style="padding:6px 8px;font-size:10px;color:var(--muted);">OK</th>
+              <th style="padding:6px 8px;font-size:10px;color:var(--muted);">Body</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = `<div style="padding:20px;color:var(--red);">⚠️ ${e.message}</div>`; }
+}
+
 async function showDislikedOnly() {
   try {
     const res = await fetch(`${WORKER_URL}/votes?gameId=${GAME_ID}&secret=${ADMIN_SECRET}`);
@@ -1135,6 +1253,7 @@ function switchTab(name, btn) {
   if (name === 'checkpoints' && adminMap) setTimeout(() => adminMap.invalidateSize(), 50);
   if (name === 'tracking') { initTrackMap(); loadTeams(); checkAdminGameState(); initLobbyPanel(); startLocationPolling(); }
   if (name === 'logs') { loadLogs(); }
+  if (name === 'scorelogs') { loadScoreLogs(); }
   if (name === 'story') { loadStory(); }
 }
 
@@ -1589,9 +1708,9 @@ function resetAll() {
 }
 
 // ── PERSIST ──
-function saveQ()    { localStorage.setItem(STORAGE_KEY,  JSON.stringify(questions)); }
+function saveQ()    { localStorage.setItem(STORAGE_KEY,  JSON.stringify(questions)); saveDbCheckpoints(); }
 function saveP()    { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); }
-function saveBank() { localStorage.setItem(QBANK_KEY,    JSON.stringify(questionBank)); }
+function saveBank() { localStorage.setItem(QBANK_KEY,    JSON.stringify(questionBank)); saveDbQuestions(); }
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
