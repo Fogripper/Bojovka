@@ -808,6 +808,7 @@ async function loadAndShowStory(onFinish) {
 
 // Polling stavu hry každých 5 sekund
 async function checkGameState() {
+  if (loggingOut) return;
   dbg("checkGameState start");
   try {
     const res = await fetch(`${WORKER_URL}/game/state?gameId=${GAME_ID}`);
@@ -839,7 +840,7 @@ async function checkGameState() {
       dbg("Hra nezačala, čekám...");
       showWaiting();
       if (!gamePollingInterval) {
-        gamePollingInterval = setInterval(checkGameState, 2000);
+        gamePollingInterval = setInterval(() => { if (!loggingOut) checkGameState(); }, 2000);
       }
     }
   } catch(e) {
@@ -1148,12 +1149,17 @@ function startCountdown() {
 }
 
 function confirmLeaveLobby() {
-  if (!confirm('Odejít z lobby a vrátit se na přihlášení?')) return;
+  if (!confirm('Odejit z lobby a vratit se na prihlaseni?')) return;
+  loggingOut = true; // okamžitě zastav polling
+  clearInterval(gamePollingInterval);
+  clearInterval(waitingDotsInterval);
+  gamePollingInterval = null;
   forceLogout();
 }
 
 function forceLogout() {
-  gameOver = false; // reset pro příště
+  loggingOut = true; // zastav veškerý polling okamžitě
+  gameOver = false;
   // Vymaž uložený tým a zobraz login obrazovku
   const keysToDelete = [];
   for (let i = 0; i < localStorage.length; i++) {
@@ -1185,7 +1191,8 @@ function forceLogout() {
   document.getElementById('team-input').value = '';
   document.getElementById('login-screen').classList.add('show');
 
-  toast('Admin resetoval hru — zadej nové jméno týmu');
+  toast('Admin resetoval hru — zadej nove jmeno tymu');
+  setTimeout(() => { loggingOut = false; }, 500); // reset po zobrazení login screenu
 }
 
 function initCharGrid() {
