@@ -70,7 +70,7 @@ header{background:var(--red2);border-bottom:4px solid var(--yellow);padding:0;di
 .px-marker.locked .m-num{color:var(--gray);}
 .px-marker.answered{background:var(--navy2);border-color:var(--gray);box-shadow:none;filter:grayscale(0.7);}
 .px-marker.answered .m-num{color:var(--gray);}
-.px-marker.nearby{background:var(--yellow);border-color:var(--white);box-shadow:3px 3px 0 var(--black),0 0 18px var(--yellow);animation:blink8 .4s step-end infinite;}
+.px-marker.nearby{background:var(--yellow);border-color:var(--white);box-shadow:3px 3px 0 var(--black),0 0 18px var(--yellow);}
 .px-marker.nearby .m-num{color:var(--black);}
 @keyframes blink8{0%,100%{opacity:1}50%{opacity:0}}
 
@@ -1146,6 +1146,11 @@ function startCountdown() {
   }, 10000);
 }
 
+function confirmLeaveLobby() {
+  if (!confirm('Odejít z lobby a vrátit se na přihlášení?')) return;
+  forceLogout();
+}
+
 function forceLogout() {
   gameOver = false; // reset pro příště
   // Vymaž uložený tým a zobraz login obrazovku
@@ -1366,7 +1371,12 @@ function checkProximity() {
       }
       const el = document.getElementById('m-' + q.id);
       if (el) { el.classList.remove('locked'); el.classList.add('nearby'); }
-      if (!nearbyNotified.has(q.id)) { nearbyNotified.add(q.id); openQuestion(q.id); }
+      if (!nearbyNotified.has(q.id)) {
+        nearbyNotified.add(q.id);
+        dbg('Otevírám otázku: ' + q.id);
+        // Malý delay aby marker stihl vykreslit
+        setTimeout(() => openQuestion(q.id), 100);
+      }
     } else {
       const el = document.getElementById('m-' + q.id);
       if (el) { el.classList.remove('nearby'); if (!progress[q.id]?.unlocked) el.classList.add('locked'); }
@@ -1394,6 +1404,7 @@ function pickRandomQuestion(cpId) {
 }
 
 function openQuestion(id) {
+  if (gameOver) return; // hra skončila, nezobrazuj otázky
   const cp = questions.find(x=>x.id===id);
   if (!cp) return;
   activeQuestion = cp;
